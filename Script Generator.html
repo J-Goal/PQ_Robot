@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProQuest 批次自動化生成器</title>
+    <!-- 引入 Tailwind CSS (CDN 方式，免安裝) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Phosphor Icons 圖標庫 -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        /* 自訂簡單的捲軸樣式 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-900 font-sans">
+    <div class="max-w-4xl mx-auto space-y-6">
+        
+        <!-- 標題區塊 -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div class="flex items-center gap-3 mb-2">
+                <i class="ph ph-arrows-clockwise text-3xl text-sky-500"></i>
+                <h1 class="text-2xl font-bold">ProQuest 助手 (v3.2.0 全自動循環版)</h1>
+            </div>
+            <p class="text-slate-500 text-sm">此工具已轉換為純 HTML 網頁，可直接於瀏覽器執行或發布至任何靜態網站空間。腳本在完成單一關鍵字的「目標瀏覽筆數」後，會自動返回首頁並輸入下一個單字，直到清單結束。</p>
+        </div>
+
+        <!-- 設定與產出區塊 -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
+            <label class="block">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-semibold flex items-center gap-2">
+                        <i class="ph ph-list-dashes text-lg text-sky-500"></i> 搜尋詞清單 (每行一個)
+                    </span>
+                    <!-- 新增：檔案匯入按鈕與隱藏的 input -->
+                    <div>
+                        <input type="file" id="fileInput" accept=".txt" class="hidden">
+                        <button id="importBtn" class="text-xs flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-1 px-3 rounded-lg transition-colors border border-slate-200">
+                            <i class="ph ph-folder-open"></i> 匯入 TXT
+                        </button>
+                    </div>
+                </div>
+                <textarea id="keywordsInput" class="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm focus:ring-2 focus:ring-sky-500 outline-none transition-all" placeholder="例如：&#10;COVID-19 Economics&#10;Social Media Psychology"></textarea>
+            </label>
+            
+            <div class="flex flex-col sm:flex-row gap-4 items-center">
+                <label class="flex-1 w-full">
+                    <span class="text-xs font-medium text-slate-500">每個詞的目標瀏覽筆數</span>
+                    <!-- 修正預設值為 100 -->
+                    <input id="targetCountInput" type="number" value="100" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
+                </label>
+                <label class="flex-1 w-full">
+                    <span class="text-xs font-medium text-slate-500">翻頁間隔 (毫秒)</span>
+                    <!-- 修正預設值為 500 -->
+                    <input id="delayInput" type="number" value="500" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
+                </label>
+            </div>
+            
+            <button id="copyBtn" class="w-full py-4 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
+                <i class="ph ph-copy text-xl" id="copyIcon"></i>
+                <span id="copyText">複製 v3.2.0 全自動循環版腳本</span>
+            </button>
+        </div>
+
+        <!-- 說明區塊 -->
+        <div class="bg-sky-50 p-6 rounded-2xl border border-sky-200 flex gap-4">
+            <i class="ph ph-check-circle text-2xl text-sky-600 shrink-0"></i>
+            <div class="text-sm text-sky-900 space-y-2">
+                <p class="font-bold underline">純靜態網頁版說明：</p>
+                <ol class="list-decimal pl-4 space-y-1">
+                    <li>您可以直接將此代碼儲存為 <code>index.html</code> 並雙擊開啟。</li>
+                    <li>若要分享給他人，可將此檔案上傳至 GitHub Pages 或 Netlify 等免費代管服務。</li>
+                    <li>所有的邏輯生成皆在瀏覽器端 (Client-side) 完成，完全不需要後端伺服器。</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- 核心邏輯腳本 -->
+    <script>
+        // 取得 DOM 元素
+        const keywordsInput = document.getElementById('keywordsInput');
+        const targetCountInput = document.getElementById('targetCountInput');
+        const delayInput = document.getElementById('delayInput');
+        const copyBtn = document.getElementById('copyBtn');
+        const copyIcon = document.getElementById('copyIcon');
+        const copyText = document.getElementById('copyText');
+        
+        // 取得檔案匯入相關元素
+        const importBtn = document.getElementById('importBtn');
+        const fileInput = document.getElementById('fileInput');
+
+        // === 新增：自動儲存與讀取功能 ===
+        const STORAGE_KEY = 'pq_generator_keywords';
+
+        // 網頁載入時，讀取已儲存的關鍵字
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedKeywords = localStorage.getItem(STORAGE_KEY);
+            if (savedKeywords) {
+                keywordsInput.value = savedKeywords;
+            }
+        });
+
+        // 當文字方塊內容改變時，自動儲存
+        keywordsInput.addEventListener('input', () => {
+            localStorage.setItem(STORAGE_KEY, keywordsInput.value);
+        });
+
+        // === 新增：處理檔案匯入 ===
+        importBtn.addEventListener('click', () => {
+            fileInput.click(); // 模擬點擊隱藏的 file input
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                // 將讀取到的內容填入 textarea
+                keywordsInput.value = content;
+                // 同步儲存到 localStorage
+                localStorage.setItem(STORAGE_KEY, content);
+            };
+            // 讀取為文字，預設使用 UTF-8
+            reader.readAsText(file);
+            
+            // 清除 input 的值，這樣即使選同一個檔案也能再次觸發 change 事件
+            fileInput.value = '';
+        });
+
+
+        // 生成 Tampermonkey 腳本內容的函式
+        function generateScript() {
+            const rawKeywords = keywordsInput.value;
+            const targetCount = targetCountInput.value;
+            const delay = delayInput.value;
+
+            // 處理關鍵字字串，轉成 JSON Array 格式
+            const keywordArray = rawKeywords.split('\n').filter(k => k.trim() !== '');
+            const keywordJson = JSON.stringify(keywordArray);
+
+            // 返回完整的腳本模板字串
+            return `// ==UserScript==
+// @name         ProQuest 深度自動化批次助手 (v3.2.0 全自動循環版)
+// @namespace    http://tampermonkey.net/
+// @version      3.2.0
+// @description  完整流程：搜尋 -> 逐筆瀏覽達標 -> 返回首頁 -> 換詞循環
+// @author       Gemini Assistant
+// @match        *://*.proquest.com/*
+// @match        *://proquest.com/*
+// @run-at       document-start
+// @grant        GM_addStyle
+// @grant        GM_log
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // ==========================================
+    // 🎯 選擇器集中管理區
+    // ==========================================
+    const SELECTORS = {
+        searchBox:   'textarea#searchTerm, input#searchTerm, input[name="searchTerm"]', 
+        fullTextCb:  'input#fullTextLimit, input#ft, input[name="isFullText"]',          
+        searchBtn:   'a#expandedSearch, #searchSubmit, .searchButton',                
+        firstFullTextLink: 'a[id^="addFlashPageParameterformat_fulltext_"]',
+        nextDocBtn:        'a#nextLink, li.results-nav-spacing a#nextLink'
+    };
+    // ==========================================
+
+    const KEYWORDS = ${keywordJson};
+    const TARGET_COUNT = ${targetCount}; 
+    const STEP_DELAY = ${delay}; 
+
+    const log = (msg) => {
+        console.log("%c[PQ-Auto-系統] " + msg, "color: white; background: #0ea5e9; padding: 4px 8px; font-weight: bold; border-radius: 4px; font-size: 13px;");
+    };
+
+    const getState = () => {
+        try {
+            return JSON.parse(localStorage.getItem('pq_auto_state')) || { 
+                keywordIndex: 0, viewedCount: 0, phase: 'IDLE' 
+            };
+        } catch(e) { return { keywordIndex: 0, viewedCount: 0, phase: 'IDLE' }; }
+    };
+    const saveState = (s) => localStorage.setItem('pq_auto_state', JSON.stringify(s));
+
+    const waitForElement = (selector, timeout = 15000) => {
+        return new Promise((resolve) => {
+            const el = document.querySelector(selector);
+            if (el) return resolve(el);
+            const observer = new MutationObserver(() => {
+                const el = document.querySelector(selector);
+                if (el) { observer.disconnect(); resolve(el); }
+            });
+            observer.observe(document.documentElement, { childList: true, subtree: true });
+            setTimeout(() => { observer.disconnect(); resolve(null); }, timeout);
+        });
+    };
+
+    const run = async () => {
+        let state = getState();
+        if (state.phase === 'IDLE') return;
+
+        if (state.keywordIndex >= KEYWORDS.length) {
+            log("🎉 所有批次關鍵字任務已全部完成！");
+            saveState({...state, phase: 'IDLE'});
+            return;
+        }
+
+        const currentKeyword = KEYWORDS[state.keywordIndex];
+        const isSearchPage = location.pathname === '/' || location.href.includes('/search') || location.href.includes('/advanced') || location.search.includes('accountid');
+        
+        if (state.phase === 'START_SEARCH' && isSearchPage) {
+            log(\`準備輸入第 \${state.keywordIndex + 1}/\${KEYWORDS.length} 個關鍵字: "\${currentKeyword}"\`);
+            
+            const searchBox = await waitForElement(SELECTORS.searchBox);
+            if (searchBox) {
+                const fullTextCb = document.querySelector(SELECTORS.fullTextCb);
+                if (fullTextCb && !fullTextCb.checked) fullTextCb.click();
+                
+                searchBox.value = currentKeyword;
+                searchBox.dispatchEvent(new Event('input', { bubbles: true }));
+                
+                state.phase = 'WAITING_FOR_RESULTS';
+                state.viewedCount = 0; 
+                saveState(state);
+                
+                setTimeout(() => {
+                    const btn = document.querySelector(SELECTORS.searchBtn);
+                    btn ? btn.click() : searchBox.closest('form')?.submit();
+                }, 1500);
+            }
+        }
+
+        if (location.href.includes('/results')) {
+            if (state.phase === 'WAITING_FOR_RESULTS') {
+                setTimeout(async () => {
+                    const firstLink = await waitForElement(SELECTORS.firstFullTextLink);
+                    if (firstLink) {
+                        firstLink.click();
+                        state.phase = 'VIEWING_DOCUMENT';
+                        state.viewedCount = 1;
+                        saveState(state);
+                    } else {
+                        state.phase = 'PAUSED_FOR_TESTING';
+                        saveState(state);
+                    }
+                }, 2000);
+            }
+        }
+
+        if (location.href.includes('/docview')) {
+            if (state.phase === 'VIEWING_DOCUMENT') {
+                log(\`📖 關鍵字 "\${currentKeyword}" -> 正在瀏覽第 \${state.viewedCount} 筆資料...\`);
+
+                if (state.viewedCount >= TARGET_COUNT) {
+                    log(\`🎉 關鍵字 "\${currentKeyword}" 已經達到目標 \${TARGET_COUNT} 筆！\`);
+                    state.keywordIndex += 1;
+                    
+                    if (state.keywordIndex >= KEYWORDS.length) {
+                        state.phase = 'IDLE';
+                        saveState(state);
+                        alert("✅ ProQuest 自動化批次任務全數完成！");
+                        return;
+                    } else {
+                        state.phase = 'START_SEARCH';
+                        state.viewedCount = 0;
+                        saveState(state);
+                        setTimeout(() => { window.location.href = "https://www.proquest.com/?accountid=31253"; }, 3000);
+                        return; 
+                    }
+                }
+
+                setTimeout(async () => {
+                    const nextBtn = await waitForElement(SELECTORS.nextDocBtn);
+                    if (nextBtn) {
+                        state.viewedCount += 1;
+                        saveState(state);
+                        if (nextBtn.tagName.toLowerCase() === 'a' && nextBtn.href) {
+                            window.location.href = nextBtn.href;
+                        } else {
+                            nextBtn.click();
+                        }
+                    } else {
+                        state.phase = 'PAUSED_FOR_TESTING';
+                        saveState(state);
+                    }
+                }, STEP_DELAY);
+            }
+        }
+    };
+
+    const injectUI = () => {
+        if (document.getElementById('pq-auto-panel')) return;
+        const panel = document.createElement('div');
+        panel.id = 'pq-auto-panel';
+        panel.style = "position:fixed; top:20px; right:20px; z-index:2147483647; background:white; padding:15px; border:4px solid #0ea5e9; border-radius:12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); width:180px; text-align:center; font-family: Arial, sans-serif;";
+        panel.innerHTML = \`
+            <div style="font-size:14px; font-weight:bold; color:#0ea5e9; margin-bottom:10px;">ProQuest 助手 v3.2.0</div>
+            <button id="pq-start" style="width:100%; background:#28a745; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:bold; margin-bottom:5px;">🚀 啟動完整循環</button>
+            <button id="pq-reset" style="width:100%; background:#6c757d; color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-size:12px;">🛑 重置進度</button>
+        \`;
+        (document.body || document.documentElement).appendChild(panel);
+        
+        document.getElementById('pq-start').onclick = () => {
+            const currentState = getState();
+            if (currentState.phase === 'IDLE' || currentState.phase === 'PAUSED_FOR_TESTING') {
+                saveState({ keywordIndex: 0, viewedCount: 0, phase: 'START_SEARCH' });
+            }
+            if (!location.href.includes('/search') && location.pathname !== '/' && !location.search.includes('accountid')) {
+                location.href = "https://www.proquest.com/?accountid=31253"; 
+            } else {
+                location.reload(); 
+            }
+        };
+        
+        document.getElementById('pq-reset').onclick = () => {
+            saveState({ keywordIndex: 0, viewedCount: 0, phase: 'IDLE' });
+            location.reload();
+        };
+    };
+
+    if (document.readyState === 'loading') {
+        window.addEventListener('DOMContentLoaded', () => {
+            setInterval(injectUI, 2000);
+            run();
+        });
+    } else {
+        setInterval(injectUI, 2000);
+        run();
+    }
+
+})();`; 
+        }
+
+        // 綁定複製按鈕事件
+        copyBtn.addEventListener('click', () => {
+            const scriptContent = generateScript();
+            
+            // 建立一個隱藏的 textarea 來執行複製 (相容性最佳的作法)
+            const textArea = document.createElement("textarea");
+            textArea.value = scriptContent;
+            
+            // 將 textarea 移出畫面外
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            document.body.appendChild(textArea);
+            
+            // 選取文字並執行複製
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            // 變更按鈕外觀提示使用者
+            copyIcon.className = "ph ph-check-circle text-xl";
+            copyText.textContent = "✅ 已複製 v3.2.0 循環版代碼";
+            copyBtn.classList.replace('bg-sky-500', 'bg-emerald-500');
+            copyBtn.classList.replace('hover:bg-sky-600', 'hover:bg-emerald-600');
+            
+            // 2秒後恢復原狀
+            setTimeout(() => {
+                copyIcon.className = "ph ph-copy text-xl";
+                copyText.textContent = "複製 v3.2.0 全自動循環版腳本";
+                copyBtn.classList.replace('bg-emerald-500', 'bg-sky-500');
+                copyBtn.classList.replace('hover:bg-emerald-600', 'hover:bg-sky-600');
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
