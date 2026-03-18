@@ -25,7 +25,7 @@
                 <i class="ph ph-shield-check text-3xl text-emerald-500"></i>
                 <h1 class="text-2xl font-bold">ProQuest 助手 (v3.2.1)</h1>
             </div>
-            <p class="text-slate-500 text-sm">此版本加入了「自動關閉干擾視窗」與「變數隔離防錯機制」，大幅減少 ProQuest 網頁自身 Bug 對自動化腳本造成的影響。</p>
+            <p class="text-slate-500 text-sm">此版本為「逐筆瀏覽」模式，加入了自動關閉干擾視窗與動態帳號 ID 抓取功能，能適應不同機構的入口網址。</p>
         </div>
 
         <!-- 設定與產出區塊 -->
@@ -49,10 +49,12 @@
             <div class="flex flex-col sm:flex-row gap-4 items-center">
                 <label class="flex-1 w-full">
                     <span class="text-xs font-medium text-slate-500">每個詞的目標瀏覽筆數</span>
+                    <!-- 預設值調整為 50 -->
                     <input id="targetCountInput" type="number" value="50" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
                 </label>
                 <label class="flex-1 w-full">
                     <span class="text-xs font-medium text-slate-500">翻頁間隔 (毫秒)</span>
+                    <!-- 預設值調整為 100 -->
                     <input id="delayInput" type="number" value="100" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
                 </label>
             </div>
@@ -135,7 +137,7 @@
 // @name         ProQuest 深度自動化批次助手 (v3.2.1)
 // @namespace    http://tampermonkey.net/
 // @version      3.2.1
-// @description  完整流程：搜尋 -> 逐筆瀏覽達標 -> 返回首頁 -> 換詞循環
+// @description  完整流程：搜尋 -> 逐筆瀏覽達標 -> 返回首頁 -> 換詞循環 (動態 ID 版)
 // @author       Gemini Assistant
 // @match        *://www.proquest.com/*
 // @run-at       document-start
@@ -155,7 +157,7 @@
         searchBtn:   'a#expandedSearch, #searchSubmit, .searchButton',                
         firstFullTextLink: 'a[id^="addFlashPageParameterformat_fulltext_"]',
         nextDocBtn:        'a#nextLink, li.results-nav-spacing a#nextLink',
-        // 新增：干擾視窗關閉按鈕
+        // 干擾視窗關閉按鈕
         closeModalBtn:     '#closeWarningModalLink, #endSessionWarningCarryOn, button.close, .ui-dialog-titlebar-close'
     };
     // ==========================================
@@ -176,6 +178,13 @@
         } catch(e) { return { keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length }; }
     };
     const saveState = (s) => localStorage.setItem('pq_auto_state', JSON.stringify(s));
+
+    // 動態取得當前的 accountid，避免寫死導致網址跳轉錯誤
+    const getBaseUrl = () => {
+        const params = new URLSearchParams(window.location.search);
+        const accId = params.get('accountid');
+        return accId ? "https://www.proquest.com/index?accountid=" + accId : "https://www.proquest.com/index";
+    };
 
     const waitForElement = (selector, timeout = 15000) => {
         return new Promise((resolve) => {
@@ -211,7 +220,7 @@
         }
 
         const currentKeyword = KEYWORDS[state.keywordIndex];
-        const isSearchPage = location.pathname === '/' || location.pathname.startsWith('/index');
+        const isSearchPage = location.pathname === '/' || location.pathname.startsWith('/index') || location.href.includes('/search') || location.search.includes('accountid');
         
         if (state.phase === 'START_SEARCH' && isSearchPage) {
             log(\`準備輸入第 \${state.keywordIndex + 1}/\${limit} 個關鍵字: "\${currentKeyword}"\`);
@@ -281,7 +290,9 @@
                         state.phase = 'START_SEARCH';
                         state.viewedCount = 0;
                         saveState(state);
-                        setTimeout(() => { window.location.href = "https://www.proquest.com/index?accountid=31253"; }, 3000);
+                        
+                        // 動態取得首頁網址返回
+                        setTimeout(() => { window.location.href = getBaseUrl(); }, 3000);
                         return; 
                     }
                 }
@@ -331,13 +342,9 @@
                 return;
             }
             
+            // 儲存狀態，並動態導向帶有正確 accountid 的首頁
             saveState({ keywordIndex: 0, viewedCount: 0, phase: 'START_SEARCH', maxKeywords: limit });
-            
-            if (location.pathname !== '/' && !location.pathname.startsWith('/index')) {
-                location.href = "https://www.proquest.com/index?accountid=31253"; 
-            } else {
-                location.reload(); 
-            }
+            location.href = getBaseUrl(); 
         };
         
         document.getElementById('pq-reset').onclick = () => {
