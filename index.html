@@ -23,9 +23,9 @@
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <div class="flex items-center gap-3 mb-2">
                 <i class="ph ph-shield-check text-3xl text-emerald-500"></i>
-                <h1 class="text-2xl font-bold">ProQuest 助手 (v3.2.1)</h1>
+                <h1 class="text-2xl font-bold">ProQuest 助手 (v3.2.2)</h1>
             </div>
-            <p class="text-slate-500 text-sm">此版本為「逐筆瀏覽」模式，加入了自動關閉干擾視窗與動態帳號 ID 抓取功能，能適應不同機構的入口網址。</p>
+            <p class="text-slate-500 text-sm">此版本為「逐筆瀏覽」模式，保留了動態詢問與總結確認功能，並全面升級「驗證碼自動凍結計時」機制。無論遇到 Cloudflare 或系統內建驗證，腳本都會耐心等待您手動點擊後自動接續執行。</p>
         </div>
 
         <!-- 設定與產出區塊 -->
@@ -48,12 +48,12 @@
             
             <div class="flex flex-col sm:flex-row gap-4 items-center">
                 <label class="flex-1 w-full">
-                    <span class="text-xs font-medium text-slate-500">每個詞的目標瀏覽筆數</span>
+                    <span class="text-xs font-medium text-slate-500">啟動時的「預設」瀏覽筆數</span>
                     <!-- 預設值調整為 50 -->
                     <input id="targetCountInput" type="number" value="50" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
                 </label>
                 <label class="flex-1 w-full">
-                    <span class="text-xs font-medium text-slate-500">翻頁間隔 (毫秒)</span>
+                    <span class="text-xs font-medium text-slate-500">啟動時的「預設」翻頁間隔 (毫秒)</span>
                     <!-- 預設值調整為 100 -->
                     <input id="delayInput" type="number" value="100" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
                 </label>
@@ -61,7 +61,7 @@
             
             <button id="copyBtn" class="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
                 <i class="ph ph-copy text-xl" id="copyIcon"></i>
-                <span id="copyText">複製 v3.2.1 腳本</span>
+                <span id="copyText">複製 v3.2.2 腳本</span>
             </button>
         </div>
 
@@ -69,8 +69,8 @@
         <div class="bg-sky-50 p-6 rounded-2xl border border-sky-200 flex gap-4">
             <i class="ph ph-warning-circle text-2xl text-sky-600 shrink-0"></i>
             <div class="text-sm text-sky-900 space-y-2">
-                <p class="font-bold underline">重要除錯提示：</p>
-                <p>若您在 Tampermonkey 中遇到 <code>searchBox is not defined</code> 等錯誤，請務必先刪除 Tampermonkey 控制面板中所有舊版的腳本，確保沒有舊程式碼在背景干擾！</p>
+                <p class="font-bold underline">驗證畫面處理提示：</p>
+                <p>若遇到「驗證您是人類」或「可能是機器人」等驗證畫面，腳本將自動暫停超時倒數。您只需安心手動點擊驗證與提交，畫面恢復後腳本便會自動接手工作！</p>
             </div>
         </div>
     </div>
@@ -125,8 +125,8 @@
         // 生成 Tampermonkey 腳本內容的函式
         function generateScript() {
             const rawKeywords = keywordsInput.value;
-            const targetCount = targetCountInput.value;
-            const delay = delayInput.value;
+            const defaultTargetCount = targetCountInput.value;
+            const defaultDelay = delayInput.value;
 
             // 處理關鍵字字串，轉成 JSON Array 格式
             const keywordArray = rawKeywords.split('\n').filter(k => k.trim() !== '');
@@ -134,10 +134,10 @@
 
             // 返回完整的腳本模板字串
             return `// ==UserScript==
-// @name         ProQuest 深度自動化批次助手 (v3.2.1)
+// @name         ProQuest 深度自動化批次助手 (v3.2.2)
 // @namespace    http://tampermonkey.net/
-// @version      3.2.1
-// @description  完整流程：搜尋 -> 逐筆瀏覽達標 -> 返回首頁 -> 換詞循環 (動態 ID 版)
+// @version      3.2.2
+// @description  完整流程：搜尋 -> 逐筆瀏覽達標 -> 返回首頁 -> 換詞循環 (無縫相容 Cloudflare/hCaptcha)
 // @author       Gemini Assistant
 // @match        *://www.proquest.com/*
 // @run-at       document-start
@@ -163,8 +163,6 @@
     // ==========================================
 
     const KEYWORDS = ${keywordJson};
-    const TARGET_COUNT = ${targetCount}; 
-    const STEP_DELAY = ${delay}; 
 
     const log = (msg) => {
         console.log("%c[PQ-Auto-系統] " + msg, "color: white; background: #059669; padding: 4px 8px; font-weight: bold; border-radius: 4px; font-size: 13px;");
@@ -173,9 +171,11 @@
     const getState = () => {
         try {
             return JSON.parse(localStorage.getItem('pq_auto_state')) || { 
-                keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length 
+                keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultTargetCount}, stepDelay: ${defaultDelay}
             };
-        } catch(e) { return { keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length }; }
+        } catch(e) { 
+            return { keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultTargetCount}, stepDelay: ${defaultDelay} }; 
+        }
     };
     const saveState = (s) => localStorage.setItem('pq_auto_state', JSON.stringify(s));
 
@@ -186,16 +186,46 @@
         return accId ? "https://www.proquest.com/index?accountid=" + accId : "https://www.proquest.com/index";
     };
 
+    // 【核心升級】具備驗證碼凍結超時機制的等待函式
     const waitForElement = (selector, timeout = 15000) => {
         return new Promise((resolve) => {
             const el = document.querySelector(selector);
             if (el) return resolve(el);
-            const observer = new MutationObserver(() => {
+            
+            let timeElapsed = 0;
+            const intervalTime = 1000;
+            
+            const timer = setInterval(() => {
                 const el = document.querySelector(selector);
-                if (el) { observer.disconnect(); resolve(el); }
-            });
-            observer.observe(document.documentElement, { childList: true, subtree: true });
-            setTimeout(() => { observer.disconnect(); resolve(null); }, timeout);
+                if (el) { 
+                    clearInterval(timer); 
+                    window.captchaAlerted = false; // 重置提示狀態
+                    resolve(el); 
+                    return; 
+                }
+                
+                // 檢查畫面上是否有驗證碼特徵
+                const bodyStr = document.body ? document.body.innerText : '';
+                const isCaptcha = document.querySelector('iframe[src*="cloudflare"], iframe[src*="hcaptcha"], #cf-challenge-running') ||
+                                  bodyStr.includes('可能是機器人') || 
+                                  bodyStr.includes('驗證您是人類') || 
+                                  bodyStr.includes('security check');
+                
+                if (isCaptcha) {
+                    // 若有驗證碼，不增加 timeElapsed，讓腳本進入「無限期等待」
+                    if (!window.captchaAlerted) {
+                        log("⚠️ 偵測到驗證要求！請手動完成驗證，腳本正耐心等待您...");
+                        window.captchaAlerted = true;
+                    }
+                } else {
+                    // 若沒有驗證碼，正常推進超時倒數
+                    timeElapsed += intervalTime;
+                    if (timeElapsed >= timeout) {
+                        clearInterval(timer);
+                        resolve(null);
+                    }
+                }
+            }, intervalTime);
         });
     };
 
@@ -203,7 +233,11 @@
         let state = getState();
         if (state.phase === 'IDLE') return;
 
-        // 【新增防呆】嘗試關閉可能阻擋畫面的 ProQuest 系統彈出視窗
+        // 讀取這次任務設定的目標參數
+        const TARGET_COUNT = state.targetCount || ${defaultTargetCount};
+        const STEP_DELAY = state.stepDelay || ${defaultDelay};
+
+        // 嘗試關閉可能阻擋畫面的 ProQuest 系統彈出視窗
         try {
             const modalBtn = document.querySelector(SELECTORS.closeModalBtn);
             if (modalBtn && modalBtn.offsetParent !== null) {
@@ -226,7 +260,6 @@
             log(\`準備輸入第 \${state.keywordIndex + 1}/\${limit} 個關鍵字: "\${currentKeyword}"\`);
             
             try {
-                // 變數更名以避免任何潛在的命名衝突
                 const targetSearchBox = await waitForElement(SELECTORS.searchBox);
                 if (targetSearchBox) {
                     const fullTextCb = document.querySelector(SELECTORS.fullTextCb);
@@ -322,28 +355,72 @@
         panel.id = 'pq-auto-panel';
         panel.style = "position:fixed; top:20px; right:20px; z-index:2147483647; background:white; padding:15px; border:4px solid #059669; border-radius:12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); width:180px; text-align:center; font-family: Arial, sans-serif;";
         panel.innerHTML = \`
-            <div style="font-size:14px; font-weight:bold; color:#059669; margin-bottom:10px;">ProQuest 助手 v3.2.1</div>
+            <div style="font-size:14px; font-weight:bold; color:#059669; margin-bottom:10px;">ProQuest 助手 v3.2.2</div>
             <button id="pq-start" style="width:100%; background:#28a745; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:bold; margin-bottom:5px;">🚀 啟動完整循環</button>
             <button id="pq-reset" style="width:100%; background:#6c757d; color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-size:12px;">🛑 重置進度</button>
         \`;
         (document.body || document.documentElement).appendChild(panel);
         
         document.getElementById('pq-start').onclick = () => {
-            const userInput = window.prompt(
+            // 1. 詢問要執行幾個關鍵字
+            const limitInput = window.prompt(
                 "目前清單共有 " + KEYWORDS.length + " 個關鍵字。\\n請問本次任務要執行前幾個？", 
                 KEYWORDS.length
             );
-            
-            if (userInput === null) return; 
-            
-            const limit = parseInt(userInput, 10);
+            if (limitInput === null) return; 
+            const limit = parseInt(limitInput, 10);
             if (isNaN(limit) || limit <= 0 || limit > KEYWORDS.length) {
                 alert("輸入無效！請輸入 1 到 " + KEYWORDS.length + " 之間的數字。");
                 return;
             }
+
+            // 2. 詢問每個詞的目標瀏覽筆數
+            const countInput = window.prompt(
+                "請確認每個詞的「目標瀏覽筆數」：", 
+                ${defaultTargetCount}
+            );
+            if (countInput === null) return;
+            const tCount = parseInt(countInput, 10);
+            if (isNaN(tCount) || tCount <= 0) {
+                alert("輸入無效！請輸入大於 0 的數字。");
+                return;
+            }
+
+            // 3. 詢問翻頁間隔
+            const delayInput = window.prompt(
+                "請確認「翻頁間隔」時間 (毫秒)：", 
+                ${defaultDelay}
+            );
+            if (delayInput === null) return;
+            const tDelay = parseInt(delayInput, 10);
+            if (isNaN(tDelay) || tDelay < 0) {
+                alert("輸入無效！請輸入有效的毫秒數。");
+                return;
+            }
+
+            // 4. 計算總數與最終確認
+            const totalDocs = limit * tCount;
+            const confirmMsg = "請確認本次任務資訊：\\n\\n" +
+                               "查詢單字數：" + limit + " 個\\n" +
+                               "每個詞的瀏覽筆數：" + tCount + " 筆\\n" +
+                               "-------------------------\\n" +
+                               "總計：" + totalDocs + " 篇\\n\\n" +
+                               "翻頁間隔：" + tDelay + " 毫秒\\n\\n" +
+                               "按下「確定」開始運行腳本！";
+                               
+            if (!window.confirm(confirmMsg)) {
+                return; // 使用者按下取消
+            }
             
-            // 儲存狀態，並動態導向帶有正確 accountid 的首頁
-            saveState({ keywordIndex: 0, viewedCount: 0, phase: 'START_SEARCH', maxKeywords: limit });
+            // 儲存狀態，包含新輸入的目標筆數與間隔，並動態導向帶有正確 accountid 的首頁
+            saveState({ 
+                keywordIndex: 0, 
+                viewedCount: 0, 
+                phase: 'START_SEARCH', 
+                maxKeywords: limit,
+                targetCount: tCount,
+                stepDelay: tDelay
+            });
             location.href = getBaseUrl(); 
         };
         
@@ -381,13 +458,13 @@
             document.body.removeChild(textArea);
             
             copyIcon.className = "ph ph-check-circle text-xl";
-            copyText.textContent = "✅ 已複製 v3.2.1 代碼";
+            copyText.textContent = "✅ 已複製 v3.2.2 代碼";
             copyBtn.classList.replace('bg-emerald-500', 'bg-sky-500');
             copyBtn.classList.replace('hover:bg-emerald-600', 'hover:bg-sky-600');
             
             setTimeout(() => {
                 copyIcon.className = "ph ph-copy text-xl";
-                copyText.textContent = "複製 v3.2.1 腳本";
+                copyText.textContent = "複製 v3.2.2 腳本";
                 copyBtn.classList.replace('bg-sky-500', 'bg-emerald-500');
                 copyBtn.classList.replace('hover:bg-sky-600', 'hover:bg-emerald-600');
             }, 2000);
