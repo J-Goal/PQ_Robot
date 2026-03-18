@@ -22,10 +22,10 @@
         <!-- 標題區塊 -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <div class="flex items-center gap-3 mb-2">
-                <i class="ph ph-arrows-clockwise text-3xl text-sky-500"></i>
-                <h1 class="text-2xl font-bold">ProQuest 助手 (v3.2.0 全自動循環版)</h1>
+                <i class="ph ph-shield-check text-3xl text-emerald-500"></i>
+                <h1 class="text-2xl font-bold">ProQuest 助手 (v3.2.1)</h1>
             </div>
-            <p class="text-slate-500 text-sm">此工具已轉換為純 HTML 網頁，可直接於瀏覽器執行或發布至任何靜態網站空間。腳本在完成單一關鍵字的「目標瀏覽筆數」後，會自動返回首頁並輸入下一個單字，直到清單結束。</p>
+            <p class="text-slate-500 text-sm">此版本加入了「自動關閉干擾視窗」與「變數隔離防錯機制」，大幅減少 ProQuest 網頁自身 Bug 對自動化腳本造成的影響。</p>
         </div>
 
         <!-- 設定與產出區塊 -->
@@ -35,7 +35,7 @@
                     <span class="text-sm font-semibold flex items-center gap-2">
                         <i class="ph ph-list-dashes text-lg text-sky-500"></i> 搜尋詞清單 (每行一個)
                     </span>
-                    <!-- 新增：檔案匯入按鈕與隱藏的 input -->
+                    <!-- 檔案匯入按鈕 -->
                     <div>
                         <input type="file" id="fileInput" accept=".txt" class="hidden">
                         <button id="importBtn" class="text-xs flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-1 px-3 rounded-lg transition-colors border border-slate-200">
@@ -49,32 +49,26 @@
             <div class="flex flex-col sm:flex-row gap-4 items-center">
                 <label class="flex-1 w-full">
                     <span class="text-xs font-medium text-slate-500">每個詞的目標瀏覽筆數</span>
-                    <!-- 修正預設值為 100 -->
-                    <input id="targetCountInput" type="number" value="100" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
+                    <input id="targetCountInput" type="number" value="50" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
                 </label>
                 <label class="flex-1 w-full">
                     <span class="text-xs font-medium text-slate-500">翻頁間隔 (毫秒)</span>
-                    <!-- 修正預設值為 500 -->
-                    <input id="delayInput" type="number" value="500" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
+                    <input id="delayInput" type="number" value="100" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
                 </label>
             </div>
             
-            <button id="copyBtn" class="w-full py-4 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
+            <button id="copyBtn" class="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
                 <i class="ph ph-copy text-xl" id="copyIcon"></i>
-                <span id="copyText">複製 v3.2.0 全自動循環版腳本</span>
+                <span id="copyText">複製 v3.2.1 腳本</span>
             </button>
         </div>
 
         <!-- 說明區塊 -->
         <div class="bg-sky-50 p-6 rounded-2xl border border-sky-200 flex gap-4">
-            <i class="ph ph-check-circle text-2xl text-sky-600 shrink-0"></i>
+            <i class="ph ph-warning-circle text-2xl text-sky-600 shrink-0"></i>
             <div class="text-sm text-sky-900 space-y-2">
-                <p class="font-bold underline">純靜態網頁版說明：</p>
-                <ol class="list-decimal pl-4 space-y-1">
-                    <li>您可以直接將此代碼儲存為 <code>index.html</code> 並雙擊開啟。</li>
-                    <li>若要分享給他人，可將此檔案上傳至 GitHub Pages 或 Netlify 等免費代管服務。</li>
-                    <li>所有的邏輯生成皆在瀏覽器端 (Client-side) 完成，完全不需要後端伺服器。</li>
-                </ol>
+                <p class="font-bold underline">重要除錯提示：</p>
+                <p>若您在 Tampermonkey 中遇到 <code>searchBox is not defined</code> 等錯誤，請務必先刪除 Tampermonkey 控制面板中所有舊版的腳本，確保沒有舊程式碼在背景干擾！</p>
             </div>
         </div>
     </div>
@@ -93,10 +87,9 @@
         const importBtn = document.getElementById('importBtn');
         const fileInput = document.getElementById('fileInput');
 
-        // === 新增：自動儲存與讀取功能 ===
+        // 自動儲存與讀取功能
         const STORAGE_KEY = 'pq_generator_keywords';
 
-        // 網頁載入時，讀取已儲存的關鍵字
         window.addEventListener('DOMContentLoaded', () => {
             const savedKeywords = localStorage.getItem(STORAGE_KEY);
             if (savedKeywords) {
@@ -104,14 +97,13 @@
             }
         });
 
-        // 當文字方塊內容改變時，自動儲存
         keywordsInput.addEventListener('input', () => {
             localStorage.setItem(STORAGE_KEY, keywordsInput.value);
         });
 
-        // === 新增：處理檔案匯入 ===
+        // 處理檔案匯入
         importBtn.addEventListener('click', () => {
-            fileInput.click(); // 模擬點擊隱藏的 file input
+            fileInput.click(); 
         });
 
         fileInput.addEventListener('change', (e) => {
@@ -121,18 +113,12 @@
             const reader = new FileReader();
             reader.onload = function(e) {
                 const content = e.target.result;
-                // 將讀取到的內容填入 textarea
                 keywordsInput.value = content;
-                // 同步儲存到 localStorage
                 localStorage.setItem(STORAGE_KEY, content);
             };
-            // 讀取為文字，預設使用 UTF-8
             reader.readAsText(file);
-            
-            // 清除 input 的值，這樣即使選同一個檔案也能再次觸發 change 事件
             fileInput.value = '';
         });
-
 
         // 生成 Tampermonkey 腳本內容的函式
         function generateScript() {
@@ -146,9 +132,9 @@
 
             // 返回完整的腳本模板字串
             return `// ==UserScript==
-// @name         ProQuest 深度自動化批次助手 (v3.2.0 全自動循環版)
+// @name         ProQuest 深度自動化批次助手 (v3.2.1)
 // @namespace    http://tampermonkey.net/
-// @version      3.2.0
+// @version      3.2.1
 // @description  完整流程：搜尋 -> 逐筆瀏覽達標 -> 返回首頁 -> 換詞循環
 // @author       Gemini Assistant
 // @match        *://www.proquest.com/*
@@ -168,7 +154,9 @@
         fullTextCb:  'input#fullTextLimit, input#ft, input[name="isFullText"]',          
         searchBtn:   'a#expandedSearch, #searchSubmit, .searchButton',                
         firstFullTextLink: 'a[id^="addFlashPageParameterformat_fulltext_"]',
-        nextDocBtn:        'a#nextLink, li.results-nav-spacing a#nextLink'
+        nextDocBtn:        'a#nextLink, li.results-nav-spacing a#nextLink',
+        // 新增：干擾視窗關閉按鈕
+        closeModalBtn:     '#closeWarningModalLink, #endSessionWarningCarryOn, button.close, .ui-dialog-titlebar-close'
     };
     // ==========================================
 
@@ -177,7 +165,7 @@
     const STEP_DELAY = ${delay}; 
 
     const log = (msg) => {
-        console.log("%c[PQ-Auto-系統] " + msg, "color: white; background: #0ea5e9; padding: 4px 8px; font-weight: bold; border-radius: 4px; font-size: 13px;");
+        console.log("%c[PQ-Auto-系統] " + msg, "color: white; background: #059669; padding: 4px 8px; font-weight: bold; border-radius: 4px; font-size: 13px;");
     };
 
     const getState = () => {
@@ -206,7 +194,15 @@
         let state = getState();
         if (state.phase === 'IDLE') return;
 
-        // 檢查是否達到使用者設定的執行上限，或清單跑完
+        // 【新增防呆】嘗試關閉可能阻擋畫面的 ProQuest 系統彈出視窗
+        try {
+            const modalBtn = document.querySelector(SELECTORS.closeModalBtn);
+            if (modalBtn && modalBtn.offsetParent !== null) {
+                log("⚠️ 偵測到網頁彈出視窗，已自動嘗試關閉...");
+                modalBtn.click();
+            }
+        } catch(e) {}
+
         const limit = state.maxKeywords || KEYWORDS.length;
         if (state.keywordIndex >= limit || state.keywordIndex >= KEYWORDS.length) {
             log("🎉 本次設定的關鍵字任務已全部完成！");
@@ -215,25 +211,38 @@
         }
 
         const currentKeyword = KEYWORDS[state.keywordIndex];
-        const isSearchPage = location.href.startsWith('https://www.proquest.com/index?');
+        const isSearchPage = location.pathname === '/' || location.pathname.startsWith('/index');
         
         if (state.phase === 'START_SEARCH' && isSearchPage) {
             log(\`準備輸入第 \${state.keywordIndex + 1}/\${limit} 個關鍵字: "\${currentKeyword}"\`);
-            if (searchBox) {
-                const fullTextCb = document.querySelector(SELECTORS.fullTextCb);
-                if (fullTextCb && !fullTextCb.checked) fullTextCb.click();
-                
-                searchBox.value = currentKeyword;
-                searchBox.dispatchEvent(new Event('input', { bubbles: true }));
-                
-                state.phase = 'WAITING_FOR_RESULTS';
-                state.viewedCount = 0; 
-                saveState(state);
-                
-                setTimeout(() => {
-                    const btn = document.querySelector(SELECTORS.searchBtn);
-                    btn ? btn.click() : searchBox.closest('form')?.submit();
-                }, 1500);
+            
+            try {
+                // 變數更名以避免任何潛在的命名衝突
+                const targetSearchBox = await waitForElement(SELECTORS.searchBox);
+                if (targetSearchBox) {
+                    const fullTextCb = document.querySelector(SELECTORS.fullTextCb);
+                    if (fullTextCb && !fullTextCb.checked) fullTextCb.click();
+                    
+                    targetSearchBox.value = currentKeyword;
+                    targetSearchBox.dispatchEvent(new Event('input', { bubbles: true }));
+                    
+                    state.phase = 'WAITING_FOR_RESULTS';
+                    state.viewedCount = 0; 
+                    saveState(state);
+                    
+                    setTimeout(() => {
+                        const btn = document.querySelector(SELECTORS.searchBtn);
+                        if (btn) {
+                            btn.click();
+                        } else if (targetSearchBox.closest('form')) {
+                            targetSearchBox.closest('form').submit();
+                        }
+                    }, 1500);
+                } else {
+                    log("❌ 找不到搜尋框，請確認目前是否在首頁。");
+                }
+            } catch (err) {
+                log("❌ 發生預期外錯誤: " + err.message);
             }
         }
 
@@ -300,35 +309,31 @@
         if (document.getElementById('pq-auto-panel')) return;
         const panel = document.createElement('div');
         panel.id = 'pq-auto-panel';
-        panel.style = "position:fixed; top:20px; right:20px; z-index:2147483647; background:white; padding:15px; border:4px solid #0ea5e9; border-radius:12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); width:180px; text-align:center; font-family: Arial, sans-serif;";
+        panel.style = "position:fixed; top:20px; right:20px; z-index:2147483647; background:white; padding:15px; border:4px solid #059669; border-radius:12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); width:180px; text-align:center; font-family: Arial, sans-serif;";
         panel.innerHTML = \`
-            <div style="font-size:14px; font-weight:bold; color:#0ea5e9; margin-bottom:10px;">ProQuest 助手 v3.2.0</div>
+            <div style="font-size:14px; font-weight:bold; color:#059669; margin-bottom:10px;">ProQuest 助手 v3.2.1</div>
             <button id="pq-start" style="width:100%; background:#28a745; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:bold; margin-bottom:5px;">🚀 啟動完整循環</button>
             <button id="pq-reset" style="width:100%; background:#6c757d; color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-size:12px;">🛑 重置進度</button>
         \`;
         (document.body || document.documentElement).appendChild(panel);
         
         document.getElementById('pq-start').onclick = () => {
-            const currentState = getState();
-            if (currentState.phase === 'IDLE' || currentState.phase === 'PAUSED_FOR_TESTING') {
-                // 彈出對話窗詢問使用者要執行幾個關鍵字
-                const userInput = window.prompt(
-                    "目前清單共有 " + KEYWORDS.length + " 個關鍵字。\\n請問本次任務要執行前幾個？", 
-                    KEYWORDS.length
-                );
-                
-                // 如果使用者按取消，則不執行
-                if (userInput === null) return; 
-                
-                const limit = parseInt(userInput, 10);
-                if (isNaN(limit) || limit <= 0 || limit > KEYWORDS.length) {
-                    alert("輸入無效！請輸入 1 到 " + KEYWORDS.length + " 之間的數字。");
-                    return;
-                }
-                
-                saveState({ keywordIndex: 0, viewedCount: 0, phase: 'START_SEARCH', maxKeywords: limit });
+            const userInput = window.prompt(
+                "目前清單共有 " + KEYWORDS.length + " 個關鍵字。\\n請問本次任務要執行前幾個？", 
+                KEYWORDS.length
+            );
+            
+            if (userInput === null) return; 
+            
+            const limit = parseInt(userInput, 10);
+            if (isNaN(limit) || limit <= 0 || limit > KEYWORDS.length) {
+                alert("輸入無效！請輸入 1 到 " + KEYWORDS.length + " 之間的數字。");
+                return;
             }
-            if (!location.href.startsWith('https://www.proquest.com/index?')) {
+            
+            saveState({ keywordIndex: 0, viewedCount: 0, phase: 'START_SEARCH', maxKeywords: limit });
+            
+            if (location.pathname !== '/' && !location.pathname.startsWith('/index')) {
                 location.href = "https://www.proquest.com/index?accountid=31253"; 
             } else {
                 location.reload(); 
@@ -358,32 +363,26 @@
         copyBtn.addEventListener('click', () => {
             const scriptContent = generateScript();
             
-            // 建立一個隱藏的 textarea 來執行複製 (相容性最佳的作法)
             const textArea = document.createElement("textarea");
             textArea.value = scriptContent;
-            
-            // 將 textarea 移出畫面外
             textArea.style.position = "fixed";
             textArea.style.left = "-9999px";
             document.body.appendChild(textArea);
             
-            // 選取文字並執行複製
             textArea.select();
             document.execCommand('copy');
             document.body.removeChild(textArea);
             
-            // 變更按鈕外觀提示使用者
             copyIcon.className = "ph ph-check-circle text-xl";
-            copyText.textContent = "✅ 已複製 v3.2.0 循環版代碼";
-            copyBtn.classList.replace('bg-sky-500', 'bg-emerald-500');
-            copyBtn.classList.replace('hover:bg-sky-600', 'hover:bg-emerald-600');
+            copyText.textContent = "✅ 已複製 v3.2.1 代碼";
+            copyBtn.classList.replace('bg-emerald-500', 'bg-sky-500');
+            copyBtn.classList.replace('hover:bg-emerald-600', 'hover:bg-sky-600');
             
-            // 2秒後恢復原狀
             setTimeout(() => {
                 copyIcon.className = "ph ph-copy text-xl";
-                copyText.textContent = "複製 v3.2.0 全自動循環版腳本";
-                copyBtn.classList.replace('bg-emerald-500', 'bg-sky-500');
-                copyBtn.classList.replace('hover:bg-emerald-600', 'hover:bg-sky-600');
+                copyText.textContent = "複製 v3.2.1 腳本";
+                copyBtn.classList.replace('bg-sky-500', 'bg-emerald-500');
+                copyBtn.classList.replace('hover:bg-sky-600', 'hover:bg-emerald-600');
             }, 2000);
         });
     </script>
