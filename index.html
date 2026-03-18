@@ -151,8 +151,7 @@
 // @version      3.2.0
 // @description  完整流程：搜尋 -> 逐筆瀏覽達標 -> 返回首頁 -> 換詞循環
 // @author       Gemini Assistant
-// @match        *://*.proquest.com/*
-// @match        *://proquest.com/*
+// @match        *://www.proquest.com/*
 // @run-at       document-start
 // @grant        GM_addStyle
 // @grant        GM_log
@@ -184,9 +183,9 @@
     const getState = () => {
         try {
             return JSON.parse(localStorage.getItem('pq_auto_state')) || { 
-                keywordIndex: 0, viewedCount: 0, phase: 'IDLE' 
+                keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length 
             };
-        } catch(e) { return { keywordIndex: 0, viewedCount: 0, phase: 'IDLE' }; }
+        } catch(e) { return { keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length }; }
     };
     const saveState = (s) => localStorage.setItem('pq_auto_state', JSON.stringify(s));
 
@@ -207,19 +206,19 @@
         let state = getState();
         if (state.phase === 'IDLE') return;
 
-        if (state.keywordIndex >= KEYWORDS.length) {
-            log("🎉 所有批次關鍵字任務已全部完成！");
+        // 檢查是否達到使用者設定的執行上限，或清單跑完
+        const limit = state.maxKeywords || KEYWORDS.length;
+        if (state.keywordIndex >= limit || state.keywordIndex >= KEYWORDS.length) {
+            log("🎉 本次設定的關鍵字任務已全部完成！");
             saveState({...state, phase: 'IDLE'});
             return;
         }
 
         const currentKeyword = KEYWORDS[state.keywordIndex];
-        const isSearchPage = location.pathname === '/' || location.href.includes('/search') || location.href.includes('/advanced') || location.search.includes('accountid');
+        const isSearchPage = location.href.startsWith('https://www.proquest.com/index?');
         
         if (state.phase === 'START_SEARCH' && isSearchPage) {
-            log(\`準備輸入第 \${state.keywordIndex + 1}/\${KEYWORDS.length} 個關鍵字: "\${currentKeyword}"\`);
-            
-            const searchBox = await waitForElement(SELECTORS.searchBox);
+            log(\`準備輸入第 \${state.keywordIndex + 1}/\${limit} 個關鍵字: "\${currentKeyword}"\`);
             if (searchBox) {
                 const fullTextCb = document.querySelector(SELECTORS.fullTextCb);
                 if (fullTextCb && !fullTextCb.checked) fullTextCb.click();
@@ -263,16 +262,17 @@
                     log(\`🎉 關鍵字 "\${currentKeyword}" 已經達到目標 \${TARGET_COUNT} 筆！\`);
                     state.keywordIndex += 1;
                     
-                    if (state.keywordIndex >= KEYWORDS.length) {
+                    const limit = state.maxKeywords || KEYWORDS.length;
+                    if (state.keywordIndex >= limit || state.keywordIndex >= KEYWORDS.length) {
                         state.phase = 'IDLE';
                         saveState(state);
-                        alert("✅ ProQuest 自動化批次任務全數完成！");
+                        alert("✅ ProQuest 自動化本次任務全數完成！");
                         return;
                     } else {
                         state.phase = 'START_SEARCH';
                         state.viewedCount = 0;
                         saveState(state);
-                        setTimeout(() => { window.location.href = "https://www.proquest.com/?accountid=31253"; }, 3000);
+                        setTimeout(() => { window.location.href = "https://www.proquest.com/index?accountid=31253"; }, 3000);
                         return; 
                     }
                 }
@@ -311,10 +311,25 @@
         document.getElementById('pq-start').onclick = () => {
             const currentState = getState();
             if (currentState.phase === 'IDLE' || currentState.phase === 'PAUSED_FOR_TESTING') {
-                saveState({ keywordIndex: 0, viewedCount: 0, phase: 'START_SEARCH' });
+                // 彈出對話窗詢問使用者要執行幾個關鍵字
+                const userInput = window.prompt(
+                    "目前清單共有 " + KEYWORDS.length + " 個關鍵字。\\n請問本次任務要執行前幾個？", 
+                    KEYWORDS.length
+                );
+                
+                // 如果使用者按取消，則不執行
+                if (userInput === null) return; 
+                
+                const limit = parseInt(userInput, 10);
+                if (isNaN(limit) || limit <= 0 || limit > KEYWORDS.length) {
+                    alert("輸入無效！請輸入 1 到 " + KEYWORDS.length + " 之間的數字。");
+                    return;
+                }
+                
+                saveState({ keywordIndex: 0, viewedCount: 0, phase: 'START_SEARCH', maxKeywords: limit });
             }
-            if (!location.href.includes('/search') && location.pathname !== '/' && !location.search.includes('accountid')) {
-                location.href = "https://www.proquest.com/?accountid=31253"; 
+            if (!location.href.startsWith('https://www.proquest.com/index?')) {
+                location.href = "https://www.proquest.com/index?accountid=31253"; 
             } else {
                 location.reload(); 
             }
