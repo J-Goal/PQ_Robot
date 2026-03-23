@@ -1,143 +1,53 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProQuest 批次自動化生成器</title>
-    <!-- 引入 Tailwind CSS (CDN 方式，免安裝) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 Phosphor Icons 圖標庫 -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <style>
-        /* 自訂簡單的捲軸樣式 */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    </style>
-</head>
-<body class="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-900 font-sans">
-    <div class="max-w-4xl mx-auto space-y-6">
-        
-        <!-- 標題區塊 -->
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <div class="flex items-center gap-3 mb-2">
-                <i class="ph ph-shield-check text-3xl text-emerald-500"></i>
-                <h1 class="text-2xl font-bold">ProQuest 助手 (v3.2.2)</h1>
-            </div>
-            <p class="text-slate-500 text-sm">此版本為「逐筆瀏覽」模式，保留了動態詢問與總結確認功能，並全面升級「驗證碼自動凍結計時」機制。無論遇到 Cloudflare 或系統內建驗證，腳本都會耐心等待您手動點擊後自動接續執行。</p>
-        </div>
+import React, { useState, useEffect } from 'react';
+import { MousePointerClick, Printer, List, Copy, Check, ShieldCheck, Info, FolderOpen } from 'lucide-react';
 
-        <!-- 設定與產出區塊 -->
-        <div class="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
-            <label class="block">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm font-semibold flex items-center gap-2">
-                        <i class="ph ph-list-dashes text-lg text-sky-500"></i> 搜尋詞清單 (每行一個)
-                    </span>
-                    <!-- 檔案匯入按鈕 -->
-                    <div>
-                        <input type="file" id="fileInput" accept=".txt" class="hidden">
-                        <button id="importBtn" class="text-xs flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-1 px-3 rounded-lg transition-colors border border-slate-200">
-                            <i class="ph ph-folder-open"></i> 匯入 TXT
-                        </button>
-                    </div>
-                </div>
-                <textarea id="keywordsInput" class="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm focus:ring-2 focus:ring-sky-500 outline-none transition-all" placeholder="例如：&#10;COVID-19 Economics&#10;Social Media Psychology"></textarea>
-            </label>
-            
-            <div class="flex flex-col sm:flex-row gap-4 items-center">
-                <label class="flex-1 w-full">
-                    <span class="text-xs font-medium text-slate-500">啟動時的「預設」瀏覽筆數</span>
-                    <!-- 預設值調整為 50 -->
-                    <input id="targetCountInput" type="number" value="50" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
-                </label>
-                <label class="flex-1 w-full">
-                    <span class="text-xs font-medium text-slate-500">啟動時的「預設」翻頁間隔 (毫秒)</span>
-                    <!-- 預設值調整為 100 -->
-                    <input id="delayInput" type="number" value="100" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
-                </label>
-            </div>
-            
-            <button id="copyBtn" class="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
-                <i class="ph ph-copy text-xl" id="copyIcon"></i>
-                <span id="copyText">複製 v3.2.2 腳本</span>
-            </button>
-        </div>
+const App = () => {
+  const [activeTab, setActiveTab] = useState('browse');
+  const [keywords, setKeywords] = useState('');
+  
+  // 瀏覽模式參數
+  const [browseTargetCount, setBrowseTargetCount] = useState(50);
+  const [browseDelay, setBrowseDelay] = useState(100);
+  
+  // 列印模式參數
+  const [printTargetCount, setPrintTargetCount] = useState(100);
+  
+  const [copied, setCopied] = useState(false);
 
-        <!-- 說明區塊 -->
-        <div class="bg-sky-50 p-6 rounded-2xl border border-sky-200 flex gap-4">
-            <i class="ph ph-warning-circle text-2xl text-sky-600 shrink-0"></i>
-            <div class="text-sm text-sky-900 space-y-2">
-                <p class="font-bold underline">驗證畫面處理提示：</p>
-                <p>若遇到「驗證您是人類」或「可能是機器人」等驗證畫面，腳本將自動暫停超時倒數。您只需安心手動點擊驗證與提交，畫面恢復後腳本便會自動接手工作！</p>
-            </div>
-        </div>
-    </div>
+  // 本地儲存關鍵字
+  const STORAGE_KEY = 'pq_generator_keywords';
+  useEffect(() => {
+    const savedKeywords = localStorage.getItem(STORAGE_KEY);
+    if (savedKeywords) setKeywords(savedKeywords);
+  }, []);
 
-    <!-- 核心邏輯腳本 -->
-    <script>
-        // 取得 DOM 元素
-        const keywordsInput = document.getElementById('keywordsInput');
-        const targetCountInput = document.getElementById('targetCountInput');
-        const delayInput = document.getElementById('delayInput');
-        const copyBtn = document.getElementById('copyBtn');
-        const copyIcon = document.getElementById('copyIcon');
-        const copyText = document.getElementById('copyText');
-        
-        // 取得檔案匯入相關元素
-        const importBtn = document.getElementById('importBtn');
-        const fileInput = document.getElementById('fileInput');
+  const handleKeywordsChange = (e) => {
+    setKeywords(e.target.value);
+    localStorage.setItem(STORAGE_KEY, e.target.value);
+  };
 
-        // 自動儲存與讀取功能
-        const STORAGE_KEY = 'pq_generator_keywords';
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      setKeywords(event.target.result);
+      localStorage.setItem(STORAGE_KEY, event.target.result);
+    };
+    reader.readAsText(file);
+    e.target.value = ''; 
+  };
 
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedKeywords = localStorage.getItem(STORAGE_KEY);
-            if (savedKeywords) {
-                keywordsInput.value = savedKeywords;
-            }
-        });
+  const generateScript = () => {
+    const keywordArray = keywords.split('\n').filter(k => k.trim() !== '');
+    const keywordJson = JSON.stringify(keywordArray);
 
-        keywordsInput.addEventListener('input', () => {
-            localStorage.setItem(STORAGE_KEY, keywordsInput.value);
-        });
-
-        // 處理檔案匯入
-        importBtn.addEventListener('click', () => {
-            fileInput.click(); 
-        });
-
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const content = e.target.result;
-                keywordsInput.value = content;
-                localStorage.setItem(STORAGE_KEY, content);
-            };
-            reader.readAsText(file);
-            fileInput.value = '';
-        });
-
-        // 生成 Tampermonkey 腳本內容的函式
-        function generateScript() {
-            const rawKeywords = keywordsInput.value;
-            const defaultTargetCount = targetCountInput.value;
-            const defaultDelay = delayInput.value;
-
-            // 處理關鍵字字串，轉成 JSON Array 格式
-            const keywordArray = rawKeywords.split('\n').filter(k => k.trim() !== '');
-            const keywordJson = JSON.stringify(keywordArray);
-
-            // 返回完整的腳本模板字串
-            return `// ==UserScript==
-// @name         ProQuest 深度自動化批次助手 (v3.2.2)
+    if (activeTab === 'browse') {
+      return `// ==UserScript==
+// @name         ProQuest 深度自動化批次助手 (模式一：逐筆瀏覽)
 // @namespace    http://tampermonkey.net/
-// @version      3.2.2
-// @description  完整流程：搜尋 -> 逐筆瀏覽達標 -> 返回首頁 -> 換詞循環 (無縫相容 Cloudflare/hCaptcha)
+// @version      3.2.1
+// @description  完整流程：搜尋 -> 逐筆瀏覽達標 -> 返回首頁 -> 換詞循環
 // @author       Gemini Assistant
 // @match        *://www.proquest.com/*
 // @run-at       document-start
@@ -148,84 +58,58 @@
 (function() {
     'use strict';
 
-    // ==========================================
-    // 🎯 選擇器集中管理區
-    // ==========================================
     const SELECTORS = {
         searchBox:   'textarea#searchTerm, input#searchTerm, input[name="searchTerm"]', 
         fullTextCb:  'input#fullTextLimit, input#ft, input[name="isFullText"]',          
         searchBtn:   'a#expandedSearch, #searchSubmit, .searchButton',                
         firstFullTextLink: 'a[id^="addFlashPageParameterformat_fulltext_"]',
         nextDocBtn:        'a#nextLink, li.results-nav-spacing a#nextLink',
-        // 干擾視窗關閉按鈕
         closeModalBtn:     '#closeWarningModalLink, #endSessionWarningCarryOn, button.close, .ui-dialog-titlebar-close'
     };
-    // ==========================================
 
     const KEYWORDS = ${keywordJson};
 
     const log = (msg) => {
-        console.log("%c[PQ-Auto-系統] " + msg, "color: white; background: #059669; padding: 4px 8px; font-weight: bold; border-radius: 4px; font-size: 13px;");
+        console.log("%c[PQ-Auto-瀏覽] " + msg, "color: white; background: #0ea5e9; padding: 4px 8px; font-weight: bold; border-radius: 4px; font-size: 13px;");
     };
 
     const getState = () => {
         try {
             return JSON.parse(localStorage.getItem('pq_auto_state')) || { 
-                keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultTargetCount}, stepDelay: ${defaultDelay}
+                keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${browseTargetCount}, stepDelay: ${browseDelay}
             };
         } catch(e) { 
-            return { keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultTargetCount}, stepDelay: ${defaultDelay} }; 
+            return { keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${browseTargetCount}, stepDelay: ${browseDelay} }; 
         }
     };
     const saveState = (s) => localStorage.setItem('pq_auto_state', JSON.stringify(s));
 
-    // 動態取得當前的 accountid，避免寫死導致網址跳轉錯誤
     const getBaseUrl = () => {
         const params = new URLSearchParams(window.location.search);
         const accId = params.get('accountid');
         return accId ? "https://www.proquest.com/index?accountid=" + accId : "https://www.proquest.com/index";
     };
 
-    // 【核心升級】具備驗證碼凍結超時機制的等待函式
-    const waitForElement = (selector, timeout = 15000) => {
+    const waitForElement = (selector, timeout = 15000, requireVisible = true) => {
         return new Promise((resolve) => {
-            const el = document.querySelector(selector);
-            if (el) return resolve(el);
-            
-            let timeElapsed = 0;
-            const intervalTime = 1000;
-            
-            const timer = setInterval(() => {
+            const checkEl = () => {
                 const el = document.querySelector(selector);
-                if (el) { 
-                    clearInterval(timer); 
-                    window.captchaAlerted = false; // 重置提示狀態
-                    resolve(el); 
-                    return; 
-                }
-                
-                // 檢查畫面上是否有驗證碼特徵
-                const bodyStr = document.body ? document.body.innerText : '';
-                const isCaptcha = document.querySelector('iframe[src*="cloudflare"], iframe[src*="hcaptcha"], #cf-challenge-running') ||
-                                  bodyStr.includes('可能是機器人') || 
-                                  bodyStr.includes('驗證您是人類') || 
-                                  bodyStr.includes('security check');
-                
-                if (isCaptcha) {
-                    // 若有驗證碼，不增加 timeElapsed，讓腳本進入「無限期等待」
-                    if (!window.captchaAlerted) {
-                        log("⚠️ 偵測到驗證要求！請手動完成驗證，腳本正耐心等待您...");
-                        window.captchaAlerted = true;
-                    }
-                } else {
-                    // 若沒有驗證碼，正常推進超時倒數
-                    timeElapsed += intervalTime;
-                    if (timeElapsed >= timeout) {
-                        clearInterval(timer);
-                        resolve(null);
-                    }
-                }
-            }, intervalTime);
+                if (!el) return null;
+                if (!requireVisible) return el;
+                const rect = el.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) return el;
+                return null;
+            };
+
+            const initialEl = checkEl();
+            if (initialEl) return resolve(initialEl);
+
+            const observer = new MutationObserver(() => {
+                const el = checkEl();
+                if (el) { observer.disconnect(); resolve(el); }
+            });
+            observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+            setTimeout(() => { observer.disconnect(); resolve(null); }, timeout);
         });
     };
 
@@ -233,17 +117,12 @@
         let state = getState();
         if (state.phase === 'IDLE') return;
 
-        // 讀取這次任務設定的目標參數
-        const TARGET_COUNT = state.targetCount || ${defaultTargetCount};
-        const STEP_DELAY = state.stepDelay || ${defaultDelay};
+        const TARGET_COUNT = state.targetCount || ${browseTargetCount};
+        const STEP_DELAY = state.stepDelay || ${browseDelay};
 
-        // 嘗試關閉可能阻擋畫面的 ProQuest 系統彈出視窗
         try {
             const modalBtn = document.querySelector(SELECTORS.closeModalBtn);
-            if (modalBtn && modalBtn.offsetParent !== null) {
-                log("⚠️ 偵測到網頁彈出視窗，已自動嘗試關閉...");
-                modalBtn.click();
-            }
+            if (modalBtn && modalBtn.offsetParent !== null) modalBtn.click();
         } catch(e) {}
 
         const limit = state.maxKeywords || KEYWORDS.length;
@@ -258,7 +137,6 @@
         
         if (state.phase === 'START_SEARCH' && isSearchPage) {
             log(\`準備輸入第 \${state.keywordIndex + 1}/\${limit} 個關鍵字: "\${currentKeyword}"\`);
-            
             try {
                 const targetSearchBox = await waitForElement(SELECTORS.searchBox);
                 if (targetSearchBox) {
@@ -274,18 +152,11 @@
                     
                     setTimeout(() => {
                         const btn = document.querySelector(SELECTORS.searchBtn);
-                        if (btn) {
-                            btn.click();
-                        } else if (targetSearchBox.closest('form')) {
-                            targetSearchBox.closest('form').submit();
-                        }
+                        if (btn) btn.click();
+                        else if (targetSearchBox.closest('form')) targetSearchBox.closest('form').submit();
                     }, 1500);
-                } else {
-                    log("❌ 找不到搜尋框，請確認目前是否在首頁。");
                 }
-            } catch (err) {
-                log("❌ 發生預期外錯誤: " + err.message);
-            }
+            } catch (err) {}
         }
 
         if (location.href.includes('/results')) {
@@ -323,8 +194,6 @@
                         state.phase = 'START_SEARCH';
                         state.viewedCount = 0;
                         saveState(state);
-                        
-                        // 動態取得首頁網址返回
                         setTimeout(() => { window.location.href = getBaseUrl(); }, 3000);
                         return; 
                     }
@@ -335,11 +204,8 @@
                     if (nextBtn) {
                         state.viewedCount += 1;
                         saveState(state);
-                        if (nextBtn.tagName.toLowerCase() === 'a' && nextBtn.href) {
-                            window.location.href = nextBtn.href;
-                        } else {
-                            nextBtn.click();
-                        }
+                        if (nextBtn.tagName.toLowerCase() === 'a' && nextBtn.href) window.location.href = nextBtn.href;
+                        else nextBtn.click();
                     } else {
                         state.phase = 'PAUSED_FOR_TESTING';
                         saveState(state);
@@ -353,74 +219,35 @@
         if (document.getElementById('pq-auto-panel')) return;
         const panel = document.createElement('div');
         panel.id = 'pq-auto-panel';
-        panel.style = "position:fixed; top:20px; right:20px; z-index:2147483647; background:white; padding:15px; border:4px solid #059669; border-radius:12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); width:180px; text-align:center; font-family: Arial, sans-serif;";
+        panel.style = "position:fixed; top:20px; right:20px; z-index:2147483647; background:white; padding:15px; border:4px solid #0ea5e9; border-radius:12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); width:180px; text-align:center; font-family: Arial, sans-serif;";
         panel.innerHTML = \`
-            <div style="font-size:14px; font-weight:bold; color:#059669; margin-bottom:10px;">ProQuest 助手 v3.2.2</div>
+            <div style="font-size:14px; font-weight:bold; color:#0ea5e9; margin-bottom:10px;">ProQuest 逐筆助手</div>
             <button id="pq-start" style="width:100%; background:#28a745; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:bold; margin-bottom:5px;">🚀 啟動完整循環</button>
             <button id="pq-reset" style="width:100%; background:#6c757d; color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-size:12px;">🛑 重置進度</button>
         \`;
         (document.body || document.documentElement).appendChild(panel);
         
         document.getElementById('pq-start').onclick = () => {
-            // 1. 詢問要執行幾個關鍵字
-            const limitInput = window.prompt(
-                "目前清單共有 " + KEYWORDS.length + " 個關鍵字。\\n請問本次任務要執行前幾個？", 
-                KEYWORDS.length
-            );
+            const limitInput = window.prompt("目前清單共有 " + KEYWORDS.length + " 個關鍵字。\\n請問本次任務要執行前幾個？", KEYWORDS.length);
             if (limitInput === null) return; 
             const limit = parseInt(limitInput, 10);
-            if (isNaN(limit) || limit <= 0 || limit > KEYWORDS.length) {
-                alert("輸入無效！請輸入 1 到 " + KEYWORDS.length + " 之間的數字。");
-                return;
-            }
+            if (isNaN(limit) || limit <= 0 || limit > KEYWORDS.length) return;
 
-            // 2. 詢問每個詞的目標瀏覽筆數
-            const countInput = window.prompt(
-                "請確認每個詞的「目標瀏覽筆數」：", 
-                ${defaultTargetCount}
-            );
+            const countInput = window.prompt("請確認每個詞的「目標瀏覽筆數」：", ${browseTargetCount});
             if (countInput === null) return;
             const tCount = parseInt(countInput, 10);
-            if (isNaN(tCount) || tCount <= 0) {
-                alert("輸入無效！請輸入大於 0 的數字。");
-                return;
-            }
+            if (isNaN(tCount) || tCount <= 0) return;
 
-            // 3. 詢問翻頁間隔
-            const delayInput = window.prompt(
-                "請確認「翻頁間隔」時間 (毫秒)：", 
-                ${defaultDelay}
-            );
+            const delayInput = window.prompt("請確認「翻頁間隔」時間 (毫秒)：", ${browseDelay});
             if (delayInput === null) return;
             const tDelay = parseInt(delayInput, 10);
-            if (isNaN(tDelay) || tDelay < 0) {
-                alert("輸入無效！請輸入有效的毫秒數。");
-                return;
-            }
+            if (isNaN(tDelay) || tDelay < 0) return;
 
-            // 4. 計算總數與最終確認
             const totalDocs = limit * tCount;
-            const confirmMsg = "請確認本次任務資訊：\\n\\n" +
-                               "查詢單字數：" + limit + " 個\\n" +
-                               "每個詞的瀏覽筆數：" + tCount + " 筆\\n" +
-                               "-------------------------\\n" +
-                               "總計：" + totalDocs + " 篇\\n\\n" +
-                               "翻頁間隔：" + tDelay + " 毫秒\\n\\n" +
-                               "按下「確定」開始運行腳本！";
-                               
-            if (!window.confirm(confirmMsg)) {
-                return; // 使用者按下取消
-            }
+            const confirmMsg = "請確認本次任務資訊：\\n\\n查詢單字數：" + limit + " 個\\n每個詞的瀏覽筆數：" + tCount + " 筆\\n-------------------------\\n總計：" + totalDocs + " 篇\\n\\n翻頁間隔：" + tDelay + " 毫秒\\n\\n按下「確定」開始運行腳本！";
+            if (!window.confirm(confirmMsg)) return; 
             
-            // 儲存狀態，包含新輸入的目標筆數與間隔，並動態導向帶有正確 accountid 的首頁
-            saveState({ 
-                keywordIndex: 0, 
-                viewedCount: 0, 
-                phase: 'START_SEARCH', 
-                maxKeywords: limit,
-                targetCount: tCount,
-                stepDelay: tDelay
-            });
+            saveState({ keywordIndex: 0, viewedCount: 0, phase: 'START_SEARCH', maxKeywords: limit, targetCount: tCount, stepDelay: tDelay });
             location.href = getBaseUrl(); 
         };
         
@@ -430,45 +257,681 @@
         };
     };
 
-    if (document.readyState === 'loading') {
-        window.addEventListener('DOMContentLoaded', () => {
-            setInterval(injectUI, 2000);
-            run();
-        });
+    if (document.readyState === 'loading') { window.addEventListener('DOMContentLoaded', () => { setInterval(injectUI, 2000); run(); }); } 
+    else { setInterval(injectUI, 2000); run(); }
+})();`;
     } else {
-        setInterval(injectUI, 2000);
-        run();
-    }
+      // 模式二：v1.1.11 批次列印模式 (嚴格防誤點修正版)
+      return `// ==UserScript==
+// @name         ProQuest 深度自動化批次助手 (模式二：批次列印)
+// @namespace    http://tampermonkey.net/
+// @version      1.1.11
+// @description  全自動化正式版：完美修正誤點文章問題，實作嚴格的空間鎖定與防呆排除機制
+// @author       Gemini Assistant
+// @match        *://www.proquest.com/*
+// @run-at       document-start
+// @grant        GM_addStyle
+// @grant        GM_log
+// ==/UserScript==
 
-})();`; 
+(function() {
+    'use strict';
+
+    const SELECTORS = {
+        searchBox:   'textarea#searchTerm, input#searchTerm, input[name="searchTerm"]', 
+        fullTextCb:  'input#fullTextLimit, input#ft, input[name="isFullText"]',          
+        searchBtn:   'a#expandedSearch, #searchSubmit, .searchButton',                
+        
+        itemsCombo:   '#itemsPerPage-combo',          
+        itemsListbox: '#itemsPerPage-listbox',        
+        selectAllCb:  'input#mlcbAll, #selectall, .select-all-checkbox',
+        nextPageBtn:  'li.next a, a[title="Next page"], a[title="下一頁"], [aria-label="Next page"]',
+
+        exportMenuBtn: 'a#allSaveOptionsLink, a[title*="所有儲存"], a[title*="All save"]',
+        printBtn:      'a#printLink, a[title*="Print"], a[title*="列印"], [data-format="print"], .format-print',
+
+        deselectCb:    'input#deselectItems, input[name="deselectItems"], input#removeSelectedAfterExport, input[name="removeSelectedAfterExport"]',
+        captchaFrame:  'iframe[src*="hcaptcha"], iframe[src*="recaptcha"], .g-recaptcha',
+
+        closeModalBtn: '#closeWarningModalLink, #endSessionWarningCarryOn, button.close, .ui-dialog-titlebar-close'
+    };
+
+    const KEYWORDS = ${keywordJson};
+    const AJAX_DELAY = 5000; 
+
+    const log = (msg) => { console.log("%c[PQ-Auto-列印] " + msg, "color: white; background: #059669; padding: 4px 8px; font-weight: bold; border-radius: 4px; font-size: 13px;"); };
+
+    const getState = () => {
+        try {
+            return JSON.parse(localStorage.getItem('pq_print_state')) || { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${printTargetCount} };
+        } catch(e) { 
+            return { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${printTargetCount} }; 
+        }
+    };
+    const saveState = (s) => localStorage.setItem('pq_print_state', JSON.stringify(s));
+
+    const getBaseUrl = () => {
+        const params = new URLSearchParams(window.location.search);
+        const accId = params.get('accountid');
+        return accId ? "https://www.proquest.com/index?accountid=" + accId : "https://www.proquest.com/index";
+    };
+
+    const waitForElement = (selector, timeout = 15000, requireVisible = true) => {
+        return new Promise((resolve) => {
+            const checkEl = () => {
+                const el = document.querySelector(selector);
+                if (!el) return null;
+                if (!requireVisible) return el;
+                const rect = el.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) return el;
+                return null;
+            };
+
+            const initialEl = checkEl();
+            if (initialEl) return resolve(initialEl);
+
+            const observer = new MutationObserver(() => {
+                const el = checkEl();
+                if (el) { observer.disconnect(); resolve(el); }
+            });
+            observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+            setTimeout(() => { observer.disconnect(); resolve(null); }, timeout);
+        });
+    };
+
+    const run = async () => {
+        let state = getState();
+        if (state.phase === 'IDLE' || state.phase === 'PAUSED_FOR_TESTING') return;
+
+        const TARGET_COUNT = state.targetCount || ${printTargetCount};
+
+        try {
+            const modalBtn = document.querySelector(SELECTORS.closeModalBtn);
+            if (modalBtn && modalBtn.offsetParent !== null) modalBtn.click();
+        } catch(e) {}
+
+        const limit = state.maxKeywords || KEYWORDS.length;
+        if (state.keywordIndex >= limit || state.keywordIndex >= KEYWORDS.length) {
+            log("🎉 本次設定的關鍵字任務已全部完成！");
+            saveState({...state, phase: 'IDLE'});
+            return;
         }
 
-        // 綁定複製按鈕事件
-        copyBtn.addEventListener('click', () => {
-            const scriptContent = generateScript();
+        const currentKeyword = KEYWORDS[state.keywordIndex];
+        const isSearchPage = location.pathname === '/' || location.pathname.startsWith('/index') || location.href.includes('/search') || location.search.includes('accountid');
+        
+        // --- 處理返回首頁與切換關鍵字的終極動作 (v1.1.11 嚴格防禦版) ---
+        if (state.phase === 'RETURN_TO_HOME') {
+            const returnToHome = async () => {
+                log("⏳ 準備切換至下一個關鍵字，正在安全地尋找首頁標誌...");
+                
+                let logo = null;
+                
+                // 【經驗應用 1：範圍鎖定】只在導覽列尋找，避免誤觸下方文章的 Citation 連結
+                const headerArea = document.querySelector('header, nav, .navbar, #navbar, #topNavigation');
+                if (headerArea) {
+                    // 【經驗應用 2：精確定位】移除模糊比對 *=，改用確定的結構特徵
+                    logo = headerArea.querySelector('a.navbar-brand, a.brand, .logo a, a#logo, img[alt="ProQuest"]');
+                    if (logo && logo.tagName && logo.tagName.toLowerCase() === 'img') logo = logo.closest('a');
+                }
+
+                // 【經驗應用 3：終極防呆排除法】只要找到的連結包含 /docview/，絕對是抓錯了文章，立刻丟棄！
+                if (logo && logo.href && logo.href.includes('/docview/')) {
+                    log("⚠️ 發現抓取到的 Logo 其實是文章連結，已強制排除。");
+                    logo = null; 
+                }
+
+                state.keywordIndex += 1;
+                state.selectedCount = 0;
+                
+                const finalLimit = state.maxKeywords || KEYWORDS.length;
+                if (state.keywordIndex >= finalLimit || state.keywordIndex >= KEYWORDS.length) {
+                    state.phase = 'IDLE';
+                    saveState(state);
+                    alert("🎉 恭喜！您設定的所有關鍵字批次列印任務已「全數完成」！\\n\\n太棒了，腳本已成功為您處理完畢！");
+                    if (logo) logo.click();
+                    else window.location.href = getBaseUrl();
+                    return;
+                }
+
+                state.phase = 'START_SEARCH';
+                saveState(state);
+
+                log("✅ 任務推進！準備執行下一個關鍵字。");
+                if (logo) {
+                    log("👉 找到標誌，執行點擊返回首頁。");
+                    logo.click();
+                    // 保險機制：如果點擊後 3 秒沒跳轉，用網址強制導向
+                    setTimeout(() => { window.location.href = getBaseUrl(); }, 3000); 
+                } else {
+                    log("⚠️ 安全機制啟動：為了避免誤點，腳本將直接使用網址重導向返回首頁...");
+                    window.location.href = getBaseUrl();
+                }
+            };
+            returnToHome();
+            return;
+        }
+
+        // --- 透過 innerText 判別文件準備狀態 ---
+        const handlePrintCompletion = () => {
+            log("⏳ 正在等待系統產生列印文件 (精準掃描「準備文件」字樣中，請耐心等候)...");
+
+            let attempts = 0;
+            const maxAttempts = 300; 
             
-            const textArea = document.createElement("textarea");
-            textArea.value = scriptContent;
-            textArea.style.position = "fixed";
-            textArea.style.left = "-9999px";
-            document.body.appendChild(textArea);
+            const checkTimer = setInterval(async () => {
+                attempts++;
+                
+                const visibleText = document.body.innerText.replace(/\\s+/g, '').toLowerCase();
+                
+                const isStillLoading = visibleText.includes('準備文件') || 
+                                       visibleText.includes('preparingdocument') || 
+                                       visibleText.includes('loading...') || 
+                                       visibleText.includes('請稍候');
+
+                if (!isStillLoading) {
+                    log("✅ 畫面上已無「準備文件」等字樣，研判載入已完成！尋找返回按鈕...");
+                    
+                    let backBtn = document.querySelector('a#backToResults, .backToResults, a[title*="返回上一頁"], a[title*="Back to results"]');
+                    
+                    if (!backBtn) {
+                        const links = Array.from(document.querySelectorAll('a, button, span')).filter(el => {
+                            const rect = el.getBoundingClientRect();
+                            return rect.width > 0 && rect.height > 0;
+                        });
+                        backBtn = links.find(btn => {
+                            if (btn.children.length > 2) return false;
+                            const text = (btn.textContent || '').trim().toLowerCase();
+                            return text === '返回上一頁' || text.includes('返回上一頁') || text.includes('back to results');
+                        });
+                        if (backBtn && backBtn.tagName !== 'A' && backBtn.tagName !== 'BUTTON') {
+                            const parentA = backBtn.closest('a') || backBtn.closest('button');
+                            if (parentA) backBtn = parentA;
+                        }
+                    }
+
+                    if (backBtn) {
+                        clearInterval(checkTimer);
+                        log("✅ 成功找到「返回上一頁」按鈕，執行點擊！");
+                        
+                        state.phase = 'RETURN_TO_HOME';
+                        saveState(state);
+                        
+                        backBtn.click();
+                        setTimeout(() => { window.location.href = getBaseUrl(); }, 3000);
+                    } else {
+                        log("⚠️ 載入看似完成，但還沒找到「返回上一頁」按鈕，持續尋找中...");
+                    }
+                } else {
+                    log(\`⏳ 文件準備中，請稍候... (已等待 \${attempts * 2} 秒)\`);
+                }
+                
+                if (attempts >= maxAttempts) {
+                    clearInterval(checkTimer);
+                    log("❌ 等待文件產生超時。測試暫停。");
+                    state.phase = 'PAUSED_FOR_TESTING';
+                    saveState(state);
+                }
+            }, 2000); 
+        };
+
+        if (state.phase === 'WAITING_FOR_PRINT_COMPLETION') {
+            handlePrintCompletion();
+            return;
+        }
+
+        // --- 處理最終「列印選項對話框」 ---
+        const processPrintModal = async () => {
+            log("⏳ 正在等待列印選項對話框實體化載入...");
             
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
+            let continueBtn = null;
+            let activeModal = null;
+            let attempts = 0;
+            const maxAttempts = 180; 
+
+            while (attempts < maxAttempts) {
+                const dialogBoxes = Array.from(document.querySelectorAll('.ui-dialog, .modal, [role="dialog"], .dialog')).filter(d => {
+                    const rect = d.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0 && getComputedStyle(d).visibility !== 'hidden';
+                });
+                activeModal = dialogBoxes.length > 0 ? dialogBoxes[dialogBoxes.length - 1] : document.body;
+
+                const buttons = Array.from(activeModal.querySelectorAll('button, a.btn, input[type="submit"], input[type="button"], .ui-button, .btn'));
+                continueBtn = buttons.find(btn => {
+                    const rect = btn.getBoundingClientRect();
+                    if (rect.width > 0 && rect.height > 0) { 
+                        const text = (btn.textContent || btn.value || '').trim().toLowerCase();
+                        if (text.includes('取消') || text.includes('cancel') || text.includes('close') || text.includes('關閉')) return false;
+                        return text.includes('繼續') || text.includes('continue');
+                    }
+                    return false;
+                });
+
+                if (continueBtn) break; 
+                await new Promise(r => setTimeout(r, 1000));
+                attempts++;
+            }
             
-            copyIcon.className = "ph ph-check-circle text-xl";
-            copyText.textContent = "✅ 已複製 v3.2.2 代碼";
-            copyBtn.classList.replace('bg-emerald-500', 'bg-sky-500');
-            copyBtn.classList.replace('hover:bg-emerald-600', 'hover:bg-sky-600');
+            if (!continueBtn) {
+                log("❌ 等待列印對話框載入超時。測試暫停。");
+                state.phase = 'PAUSED_FOR_TESTING';
+                saveState(state);
+                return;
+            }
+
+            log("✅ 列印對話框已載入！已將操作範圍鎖定在對話框內...");
+            await new Promise(r => setTimeout(r, 1000)); 
+
+            let deselectCb = activeModal.querySelector(SELECTORS.deselectCb);
+            let targetLabel = null;
+
+            if (!deselectCb) {
+                const elements = Array.from(activeModal.querySelectorAll('label, span, div, p')).filter(el => {
+                    const rect = el.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0; 
+                });
+
+                targetLabel = elements.find(l => {
+                    if (l.children.length > 3) return false; 
+                    const t = l.textContent || '';
+                    return t.includes('完成時取消選擇項目') || t.includes('取消選擇') || t.includes('Deselect');
+                });
+
+                if (targetLabel) {
+                    if (targetLabel.getAttribute('for')) deselectCb = activeModal.querySelector('#' + targetLabel.getAttribute('for'));
+                    if (!deselectCb) deselectCb = targetLabel.querySelector('input[type="checkbox"]');
+                    if (!deselectCb && targetLabel.parentElement) deselectCb = targetLabel.parentElement.querySelector('input[type="checkbox"]');
+                }
+            }
+
+            if (deselectCb) {
+                if (!deselectCb.checked) {
+                    const label = activeModal.querySelector('label[for="' + deselectCb.id + '"]') || deselectCb.closest('label');
+                    if (label) label.click();
+                    else deselectCb.click();
+                    
+                    if (!deselectCb.checked) {
+                        deselectCb.checked = true; 
+                        deselectCb.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            } else if (targetLabel) {
+                targetLabel.click();
+            }
+
+            await new Promise(r => setTimeout(r, 500));
+
+            const captcha = activeModal.querySelector(SELECTORS.captchaFrame) || document.querySelector(SELECTORS.captchaFrame);
+            let captchaVisible = false;
+            if (captcha) {
+                const rect = captcha.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) captchaVisible = true;
+            }
+
+            if (captchaVisible) {
+                log("⚠️ 偵測到驗證碼！等待人工處理...");
+                state.phase = 'WAITING_FOR_PRINT_COMPLETION';
+                saveState(state);
+                alert("⚠️ 畫面出現驗證碼！腳本已成功為您打勾。\\n\\n👉 請手動解驗證，並【親自點擊右下角的繼續】。\\n腳本會在背景安靜等候，直到文件產生完成。");
+                setTimeout(() => { handlePrintCompletion(); }, 5000); 
+            } else {
+                log("✅ 無驗證碼，準備自動點擊「繼續」...");
+                setTimeout(() => {
+                    const finalRect = continueBtn.getBoundingClientRect();
+                    if(finalRect.width > 0 && finalRect.height > 0) {
+                        continueBtn.click();
+                        log("✅ 已成功點擊「繼續」按鈕！進入文件準備階段...");
+                        
+                        state.phase = 'WAITING_FOR_PRINT_COMPLETION';
+                        saveState(state);
+                        
+                        setTimeout(() => {
+                            if (getState().phase === 'WAITING_FOR_PRINT_COMPLETION') {
+                                handlePrintCompletion();
+                            }
+                        }, 2000);
+
+                    } else {
+                        log("❌ 「繼續」按鈕突然消失或被遮擋。測試暫停。");
+                        state.phase = 'PAUSED_FOR_TESTING';
+                        saveState(state);
+                    }
+                }, 1000); 
+            }
+        };
+
+        if (state.phase === 'START_SEARCH' && isSearchPage) {
+            log(\`準備輸入第 \${state.keywordIndex + 1}/\${limit} 個關鍵字: "\${currentKeyword}"\`);
+            try {
+                const targetSearchBox = await waitForElement(SELECTORS.searchBox);
+                if (targetSearchBox) {
+                    const fullTextCb = document.querySelector(SELECTORS.fullTextCb);
+                    if (fullTextCb && !fullTextCb.checked) fullTextCb.click();
+                    
+                    targetSearchBox.value = currentKeyword;
+                    targetSearchBox.dispatchEvent(new Event('input', { bubbles: true }));
+                    
+                    state.phase = 'SELECTING_RESULTS';
+                    state.selectedCount = 0; 
+                    saveState(state);
+                    
+                    setTimeout(() => {
+                        const btn = document.querySelector(SELECTORS.searchBtn);
+                        if (btn) btn.click();
+                        else if (targetSearchBox.closest('form')) targetSearchBox.closest('form').submit();
+                    }, 1500);
+                }
+            } catch (err) {}
+            return;
+        }
+
+        if (location.href.includes('/results')) {
+            if (state.phase === 'WAITING_FOR_PRINT_MODAL') {
+                processPrintModal();
+                return;
+            }
+
+            if (state.phase === 'SELECTING_RESULTS') {
+                log("進入搜尋結果頁，準備設定每頁筆數並勾選...");
+
+                const doSelectAll = async () => {
+                    log(\`正在尋找並點擊全選按鈕 (目前進度: \${state.selectedCount}/\${TARGET_COUNT})...\`);
+                    
+                    const selectAllCb = await waitForElement(SELECTORS.selectAllCb);
+                    if (selectAllCb) {
+                        let attempts = 0;
+                        const ensureChecked = new Promise((resolve) => {
+                            const checkTimer = setInterval(() => {
+                                if (selectAllCb.checked) {
+                                    clearInterval(checkTimer);
+                                    resolve(true);
+                                } else {
+                                    attempts++;
+                                    if (attempts > 15) { 
+                                        clearInterval(checkTimer);
+                                        resolve(false);
+                                    } else {
+                                        const label = document.querySelector('label[for="' + selectAllCb.id + '"]');
+                                        if (label) label.click();
+                                        else selectAllCb.click();
+                                        selectAllCb.dispatchEvent(new Event('change', { bubbles: true }));
+                                    }
+                                }
+                            }, 1000);
+                        });
+
+                        const isChecked = await ensureChecked;
+
+                        if (!isChecked) {
+                            log("❌ 無法成功勾選全選按鈕。測試暫停。");
+                            state.phase = 'PAUSED_FOR_TESTING';
+                            saveState(state);
+                            return;
+                        }
+
+                        log("✅ 已成功執行全選動作！等待系統紀錄...");
+                        await new Promise(r => setTimeout(r, 2000));
+
+                        state.selectedCount += 100;
+                        saveState(state);
+
+                        if (state.selectedCount < TARGET_COUNT) {
+                            log(\`🔄 尚未達標 (\${state.selectedCount}/\${TARGET_COUNT})，準備前往下一頁...\`);
+                            const nextBtn = document.querySelector(SELECTORS.nextPageBtn);
+                            if (nextBtn) {
+                                nextBtn.click();
+                                setTimeout(doSelectAll, AJAX_DELAY); 
+                            } else {
+                                log("❌ 找不到「下一頁」按鈕。測試暫停。");
+                                state.phase = 'PAUSED_FOR_TESTING';
+                                saveState(state);
+                            }
+                        } else {
+                            log(\`🎉 已選取 \${TARGET_COUNT} 筆資料！準備點開匯出選單...\`);
+
+                            setTimeout(async () => {
+                                const exportBtn = await waitForElement(SELECTORS.exportMenuBtn, 15000, true);
+                                if (exportBtn) {
+                                    exportBtn.click();
+                                    log("✅ 已點開匯出選單！等待列印按鈕浮現...");
+
+                                    const printBtn = await waitForElement(SELECTORS.printBtn, 10000, true); 
+                                    if (printBtn) {
+                                        await new Promise(r => setTimeout(r, 500)); 
+                                        printBtn.click();
+                                        log("✅ 已精準點擊「列印」按鈕！");
+                                        
+                                        state.phase = 'WAITING_FOR_PRINT_MODAL';
+                                        saveState(state);
+                                        processPrintModal();
+                                    } else {
+                                        log("❌ 找不到可見的「列印」按鈕。測試暫停。");
+                                        state.phase = 'PAUSED_FOR_TESTING';
+                                        saveState(state);
+                                    }
+                                } else {
+                                    log("❌ 找不到可見的「匯出選單」按鈕。測試暫停。");
+                                    state.phase = 'PAUSED_FOR_TESTING';
+                                    saveState(state);
+                                }
+                            }, 2000); 
+                        }
+                    }
+                };
+
+                const itemsCombo = await waitForElement(SELECTORS.itemsCombo);
+                if (itemsCombo) {
+                    if (!itemsCombo.textContent.includes('100')) {
+                        itemsCombo.click();
+                        setTimeout(() => {
+                            const listbox = document.querySelector(SELECTORS.itemsListbox);
+                            if (listbox) {
+                                const options = listbox.querySelectorAll('[role="option"], li, div');
+                                const targetOption = Array.from(options).find(opt => opt.textContent.trim() === '100');
+                                if (targetOption) {
+                                    targetOption.click();
+                                    setTimeout(doSelectAll, AJAX_DELAY); 
+                                } else doSelectAll();
+                            }
+                        }, 500);
+                        return; 
+                    } else setTimeout(doSelectAll, 1500);
+                } else setTimeout(doSelectAll, 1500);
+            }
+        }
+    };
+
+    const injectUI = () => {
+        if (document.getElementById('pq-auto-panel')) return;
+        const panel = document.createElement('div');
+        panel.id = 'pq-auto-panel';
+        panel.style = "position:fixed; top:20px; right:20px; z-index:2147483647; background:white; padding:15px; border:4px solid #059669; border-radius:12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); width:180px; text-align:center; font-family: Arial, sans-serif;";
+        panel.innerHTML = \`
+            <div style="font-size:14px; font-weight:bold; color:#059669; margin-bottom:10px;">ProQuest 列印助手</div>
+            <button id="pq-start" style="width:100%; background:#28a745; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:bold; margin-bottom:5px;">🚀 啟動列印循環</button>
+            <button id="pq-reset" style="width:100%; background:#6c757d; color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-size:12px;">🛑 重置進度</button>
+        \`;
+        (document.body || document.documentElement).appendChild(panel);
+        
+        document.getElementById('pq-start').onclick = () => {
+            const limitInput = window.prompt("目前清單共有 " + KEYWORDS.length + " 個關鍵字。\\n請問本次任務要執行前幾個？", KEYWORDS.length);
+            if (limitInput === null) return; 
+            const limit = parseInt(limitInput, 10);
+            if (isNaN(limit) || limit <= 0 || limit > KEYWORDS.length) return;
+
+            const countInput = window.prompt("請確認每個詞的「目標列印筆數」\\n(注意：必須為 100 的倍數！)：", ${printTargetCount});
+            if (countInput === null) return;
+            const tCount = parseInt(countInput, 10);
+            if (isNaN(tCount) || tCount <= 0 || tCount % 100 !== 0) { 
+                alert("目標列印筆數必須是 100 的倍數（例如：100, 200, 300）。"); 
+                return; 
+            }
+
+            const totalDocs = limit * tCount;
+            const confirmMsg = "請確認批次列印任務資訊：\\n\\n查詢單字數：" + limit + " 個\\n每個詞的列印筆數：" + tCount + " 筆\\n-------------------------\\n總計：" + totalDocs + " 篇\\n\\n按下「確定」開始運行腳本！";
+            if (!window.confirm(confirmMsg)) return; 
             
-            setTimeout(() => {
-                copyIcon.className = "ph ph-copy text-xl";
-                copyText.textContent = "複製 v3.2.2 腳本";
-                copyBtn.classList.replace('bg-sky-500', 'bg-emerald-500');
-                copyBtn.classList.replace('hover:bg-sky-600', 'hover:bg-emerald-600');
-            }, 2000);
-        });
-    </script>
-</body>
-</html>
+            saveState({ keywordIndex: 0, selectedCount: 0, phase: 'START_SEARCH', maxKeywords: limit, targetCount: tCount });
+            location.href = getBaseUrl(); 
+        };
+        
+        document.getElementById('pq-reset').onclick = () => {
+            saveState({ keywordIndex: 0, selectedCount: 0, phase: 'IDLE' });
+            location.reload();
+        };
+    };
+
+    if (document.readyState === 'loading') { window.addEventListener('DOMContentLoaded', () => { setInterval(injectUI, 2000); run(); }); } 
+    else { setInterval(injectUI, 2000); run(); }
+})();`;
+    }
+  };
+
+  const handleCopy = () => {
+    const text = generateScript();
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-900 font-sans">
+      <div className="max-w-4xl mx-auto space-y-6">
+        
+        {/* 標題區塊 */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-3 mb-2">
+            <ShieldCheck className="w-8 h-8 text-emerald-500" />
+            <h1 className="text-2xl font-bold">ProQuest 助手 (多模式整合版)</h1>
+          </div>
+          <p className="text-slate-500 text-sm">此版本支援產生不同情境的自動化腳本。請先選擇您需要的模式，設定好參數後再點擊複製。</p>
+        </div>
+
+        {/* 模式切換頁籤 (Tabs) */}
+        <div className="flex p-1 space-x-1 bg-slate-200 rounded-xl">
+          <button 
+            onClick={() => setActiveTab('browse')}
+            className={`w-full py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'browse' ? 'bg-white shadow text-sky-600' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+            }`}
+          >
+            <MousePointerClick className="w-5 h-5" /> 模式一：逐筆瀏覽
+          </button>
+          <button 
+            onClick={() => setActiveTab('print')}
+            className={`w-full py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'print' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+            }`}
+          >
+            <Printer className="w-5 h-5" /> 模式二：批次列印 (v1.1.11)
+          </button>
+        </div>
+
+        {/* 設定與產出區塊 */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
+          
+          <label className="block border-b border-slate-100 pb-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold flex items-center gap-2">
+                <List className="w-4 h-4 text-sky-500" /> 共用搜尋詞清單 (每行一個)
+              </span>
+              <div>
+                <input 
+                    type="file" 
+                    id="fileInput" 
+                    accept=".txt" 
+                    className="hidden" 
+                    onChange={handleFileUpload} 
+                />
+                <label 
+                    htmlFor="fileInput" 
+                    className="cursor-pointer text-xs flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-1 px-3 rounded-lg transition-colors border border-slate-200"
+                >
+                  <FolderOpen className="w-4 h-4" /> 匯入 TXT
+                </label>
+              </div>
+            </div>
+            <textarea 
+              className="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm focus:ring-2 focus:ring-sky-500 outline-none transition-all"
+              placeholder="例如：&#10;COVID-19 Economics&#10;Social Media Psychology"
+              value={keywords}
+              onChange={handleKeywordsChange}
+            />
+          </label>
+          
+          {/* 模式一參數 */}
+          {activeTab === 'browse' && (
+            <div className="flex flex-col sm:flex-row gap-4 items-center animate-fade-in">
+              <label className="flex-1 w-full">
+                <span className="text-xs font-medium text-slate-500">啟動時的「預設」瀏覽筆數</span>
+                <input 
+                  type="number" 
+                  value={browseTargetCount} 
+                  onChange={(e) => setBrowseTargetCount(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all" 
+                />
+              </label>
+              <label className="flex-1 w-full">
+                <span className="text-xs font-medium text-slate-500">啟動時的「預設」翻頁間隔 (毫秒)</span>
+                <input 
+                  type="number" 
+                  value={browseDelay} 
+                  onChange={(e) => setBrowseDelay(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all" 
+                />
+              </label>
+            </div>
+          )}
+
+          {/* 模式二參數 */}
+          {activeTab === 'print' && (
+            <div className="flex flex-col sm:flex-row gap-4 items-start animate-fade-in">
+              <label className="flex-1 w-full">
+                <span className="text-xs font-medium text-slate-500">啟動時的「預設」列印筆數</span>
+                <input 
+                  type="number" 
+                  step="100" 
+                  min="100" 
+                  value={printTargetCount} 
+                  onChange={(e) => setPrintTargetCount(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all" 
+                />
+                <span className="text-xs text-rose-500 mt-1 block font-bold">* 必須為 100 的倍數</span>
+              </label>
+            </div>
+          )}
+          
+          <button 
+            onClick={handleCopy} 
+            className={`w-full py-4 mt-2 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${
+              activeTab === 'browse' ? 'bg-sky-500 hover:bg-sky-600' : 'bg-emerald-500 hover:bg-emerald-600'
+            }`}
+          >
+            {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+            <span>
+              {copied 
+                ? "✅ 複製成功！" 
+                : activeTab === 'browse' ? "複製「逐筆瀏覽」腳本" : "複製「批次列印」腳本"}
+            </span>
+          </button>
+        </div>
+
+        <div className="bg-sky-50 p-6 rounded-2xl border border-sky-200 flex gap-4">
+          <Info className="w-6 h-6 text-sky-600 shrink-0" />
+          <div className="text-sm text-sky-900 space-y-2">
+            <p className="font-bold underline">操作說明：</p>
+            <p>請先在上方點擊頁籤切換您要產生的腳本類型。兩種模式產生的 Tampermonkey 腳本功能互相獨立，請依照您當下的作業需求選擇對應的腳本進行複製與安裝。</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+export default App;
