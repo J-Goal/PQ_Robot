@@ -1,49 +1,186 @@
-import React, { useState, useEffect } from 'react';
-import { MousePointerClick, Printer, List, Copy, Check, ShieldCheck, Info, FolderOpen } from 'lucide-react';
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProQuest 批次自動化生成器</title>
+    <!-- 引入 Tailwind CSS (CDN 方式，免安裝) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Phosphor Icons 圖標庫 -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        /* 自訂簡單的捲軸樣式 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-900 font-sans">
+    <div class="max-w-4xl mx-auto space-y-6">
+        
+        <!-- 標題區塊 -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div class="flex items-center gap-3 mb-2">
+                <i class="ph ph-shield-check text-3xl text-emerald-500"></i>
+                <h1 class="text-2xl font-bold">ProQuest 助手 (多模式整合版)</h1>
+            </div>
+            <p class="text-slate-500 text-sm">此版本支援產生不同情境的自動化腳本。請先選擇您需要的模式，設定好參數後再點擊複製。</p>
+        </div>
 
-const App = () => {
-  const [activeTab, setActiveTab] = useState('browse');
-  const [keywords, setKeywords] = useState('');
-  
-  // 瀏覽模式參數
-  const [browseTargetCount, setBrowseTargetCount] = useState(50);
-  const [browseDelay, setBrowseDelay] = useState(100);
-  
-  // 列印模式參數
-  const [printTargetCount, setPrintTargetCount] = useState(100);
-  
-  const [copied, setCopied] = useState(false);
+        <!-- 模式切換頁籤 (Tabs) -->
+        <div class="flex p-1 space-x-1 bg-slate-200 rounded-xl">
+            <button id="tabBrowse" class="w-full py-3 text-sm font-bold rounded-lg bg-white shadow text-sky-600 transition-all flex items-center justify-center gap-2">
+                <i class="ph ph-cursor-click text-lg"></i> 模式一：逐筆瀏覽
+            </button>
+            <button id="tabPrint" class="w-full py-3 text-sm font-bold rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all flex items-center justify-center gap-2">
+                <i class="ph ph-printer text-lg"></i> 模式二：批次列印 (v1.1.11)
+            </button>
+        </div>
 
-  // 本地儲存關鍵字
-  const STORAGE_KEY = 'pq_generator_keywords';
-  useEffect(() => {
-    const savedKeywords = localStorage.getItem(STORAGE_KEY);
-    if (savedKeywords) setKeywords(savedKeywords);
-  }, []);
+        <!-- 設定與產出區塊 -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
+            
+            <!-- 共用區塊：關鍵字清單 -->
+            <label class="block border-b border-slate-100 pb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-semibold flex items-center gap-2">
+                        <i class="ph ph-list-dashes text-lg text-sky-500"></i> 共用搜尋詞清單 (每行一個)
+                    </span>
+                    <!-- 檔案匯入按鈕 -->
+                    <div>
+                        <input type="file" id="fileInput" accept=".txt" class="hidden">
+                        <button id="importBtn" class="text-xs flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-1 px-3 rounded-lg transition-colors border border-slate-200">
+                            <i class="ph ph-folder-open"></i> 匯入 TXT
+                        </button>
+                    </div>
+                </div>
+                <textarea id="keywordsInput" class="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm focus:ring-2 focus:ring-sky-500 outline-none transition-all" placeholder="例如：&#10;COVID-19 Economics&#10;Social Media Psychology"></textarea>
+            </label>
+            
+            <!-- 模式一：逐筆瀏覽的專屬參數 -->
+            <div id="browseParams" class="flex flex-col sm:flex-row gap-4 items-center animate-fade-in">
+                <label class="flex-1 w-full">
+                    <span class="text-xs font-medium text-slate-500">啟動時的「預設」瀏覽筆數</span>
+                    <input id="targetCountInput" type="number" value="50" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
+                </label>
+                <label class="flex-1 w-full">
+                    <span class="text-xs font-medium text-slate-500">啟動時的「預設」翻頁間隔 (毫秒)</span>
+                    <input id="delayInput" type="number" value="100" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all">
+                </label>
+            </div>
 
-  const handleKeywordsChange = (e) => {
-    setKeywords(e.target.value);
-    localStorage.setItem(STORAGE_KEY, e.target.value);
-  };
+            <!-- 模式二：批次列印的專屬參數 (預設隱藏) -->
+            <div id="printParams" class="flex flex-col sm:flex-row gap-4 items-start hidden animate-fade-in">
+                <label class="flex-1 w-full">
+                    <span class="text-xs font-medium text-slate-500">啟動時的「預設」列印筆數</span>
+                    <!-- 加上 step="100" 與最低限制 -->
+                    <input id="printCountInput" type="number" step="100" min="100" value="100" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
+                    <span class="text-xs text-rose-500 mt-1 block font-bold">* 必須為 100 的倍數</span>
+                </label>
+            </div>
+            
+            <!-- 複製按鈕 -->
+            <button id="copyBtn" class="w-full py-4 mt-2 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
+                <i class="ph ph-copy text-xl" id="copyIcon"></i>
+                <span id="copyText">複製「逐筆瀏覽」腳本</span>
+            </button>
+        </div>
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(event) {
-      setKeywords(event.target.result);
-      localStorage.setItem(STORAGE_KEY, event.target.result);
-    };
-    reader.readAsText(file);
-    e.target.value = ''; 
-  };
+        <!-- 說明區塊 -->
+        <div class="bg-sky-50 p-6 rounded-2xl border border-sky-200 flex gap-4">
+            <i class="ph ph-info text-2xl text-sky-600 shrink-0"></i>
+            <div class="text-sm text-sky-900 space-y-2">
+                <p class="font-bold underline">操作說明：</p>
+                <p>請先在上方點擊頁籤切換您要產生的腳本類型。兩種模式產生的 Tampermonkey 腳本功能互相獨立，請依照您當下的作業需求選擇對應的腳本進行複製與安裝。</p>
+            </div>
+        </div>
+    </div>
 
-  const generateScript = () => {
-    const keywordArray = keywords.split('\n').filter(k => k.trim() !== '');
-    const keywordJson = JSON.stringify(keywordArray);
+    <!-- 核心邏輯腳本 -->
+    <script>
+        // === 取得 DOM 元素 ===
+        const keywordsInput = document.getElementById('keywordsInput');
+        const targetCountInput = document.getElementById('targetCountInput');
+        const delayInput = document.getElementById('delayInput');
+        const printCountInput = document.getElementById('printCountInput');
+        
+        const copyBtn = document.getElementById('copyBtn');
+        const copyIcon = document.getElementById('copyIcon');
+        const copyText = document.getElementById('copyText');
+        
+        const importBtn = document.getElementById('importBtn');
+        const fileInput = document.getElementById('fileInput');
 
-    if (activeTab === 'browse') {
-      return `// ==UserScript==
+        const tabBrowse = document.getElementById('tabBrowse');
+        const tabPrint = document.getElementById('tabPrint');
+        const browseParams = document.getElementById('browseParams');
+        const printParams = document.getElementById('printParams');
+
+        // === 狀態管理 ===
+        let currentMode = 'browse'; // 'browse' 或 'print'
+        const STORAGE_KEY = 'pq_generator_keywords';
+
+        // === 頁籤切換邏輯 ===
+        function switchTab(mode) {
+            currentMode = mode;
+            if (mode === 'browse') {
+                tabBrowse.className = "w-full py-3 text-sm font-bold rounded-lg bg-white shadow text-sky-600 transition-all flex items-center justify-center gap-2";
+                tabPrint.className = "w-full py-3 text-sm font-bold rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all flex items-center justify-center gap-2";
+                browseParams.classList.remove('hidden');
+                printParams.classList.add('hidden');
+                copyBtn.className = "w-full py-4 mt-2 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2";
+                copyText.textContent = "複製「逐筆瀏覽」腳本";
+            } else {
+                tabPrint.className = "w-full py-3 text-sm font-bold rounded-lg bg-white shadow text-emerald-600 transition-all flex items-center justify-center gap-2";
+                tabBrowse.className = "w-full py-3 text-sm font-bold rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all flex items-center justify-center gap-2";
+                browseParams.classList.add('hidden');
+                printParams.classList.remove('hidden');
+                copyBtn.className = "w-full py-4 mt-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2";
+                copyText.textContent = "複製「批次列印」腳本";
+            }
+        }
+
+        tabBrowse.addEventListener('click', () => switchTab('browse'));
+        tabPrint.addEventListener('click', () => switchTab('print'));
+
+        // === 自動儲存與檔案匯入 ===
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedKeywords = localStorage.getItem(STORAGE_KEY);
+            if (savedKeywords) keywordsInput.value = savedKeywords;
+        });
+
+        keywordsInput.addEventListener('input', () => {
+            localStorage.setItem(STORAGE_KEY, keywordsInput.value);
+        });
+
+        importBtn.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                keywordsInput.value = content;
+                localStorage.setItem(STORAGE_KEY, content);
+            };
+            reader.readAsText(file);
+            fileInput.value = '';
+        });
+
+        // === 腳本生成核心 ===
+        function generateScript() {
+            const rawKeywords = keywordsInput.value;
+            const keywordArray = rawKeywords.split('\n').filter(k => k.trim() !== '');
+            const keywordJson = JSON.stringify(keywordArray);
+
+            if (currentMode === 'browse') {
+                const defaultTargetCount = targetCountInput.value;
+                const defaultDelay = delayInput.value;
+                
+                // v3.2.1 逐筆瀏覽版腳本
+                return `// ==UserScript==
 // @name         ProQuest 深度自動化批次助手 (模式一：逐筆瀏覽)
 // @namespace    http://tampermonkey.net/
 // @version      3.2.1
@@ -76,10 +213,10 @@ const App = () => {
     const getState = () => {
         try {
             return JSON.parse(localStorage.getItem('pq_auto_state')) || { 
-                keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${browseTargetCount}, stepDelay: ${browseDelay}
+                keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultTargetCount}, stepDelay: ${defaultDelay}
             };
         } catch(e) { 
-            return { keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${browseTargetCount}, stepDelay: ${browseDelay} }; 
+            return { keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultTargetCount}, stepDelay: ${defaultDelay} }; 
         }
     };
     const saveState = (s) => localStorage.setItem('pq_auto_state', JSON.stringify(s));
@@ -117,8 +254,8 @@ const App = () => {
         let state = getState();
         if (state.phase === 'IDLE') return;
 
-        const TARGET_COUNT = state.targetCount || ${browseTargetCount};
-        const STEP_DELAY = state.stepDelay || ${browseDelay};
+        const TARGET_COUNT = state.targetCount || ${defaultTargetCount};
+        const STEP_DELAY = state.stepDelay || ${defaultDelay};
 
         try {
             const modalBtn = document.querySelector(SELECTORS.closeModalBtn);
@@ -233,12 +370,12 @@ const App = () => {
             const limit = parseInt(limitInput, 10);
             if (isNaN(limit) || limit <= 0 || limit > KEYWORDS.length) return;
 
-            const countInput = window.prompt("請確認每個詞的「目標瀏覽筆數」：", ${browseTargetCount});
+            const countInput = window.prompt("請確認每個詞的「目標瀏覽筆數」：", ${defaultTargetCount});
             if (countInput === null) return;
             const tCount = parseInt(countInput, 10);
             if (isNaN(tCount) || tCount <= 0) return;
 
-            const delayInput = window.prompt("請確認「翻頁間隔」時間 (毫秒)：", ${browseDelay});
+            const delayInput = window.prompt("請確認「翻頁間隔」時間 (毫秒)：", ${defaultDelay});
             if (delayInput === null) return;
             const tDelay = parseInt(delayInput, 10);
             if (isNaN(tDelay) || tDelay < 0) return;
@@ -260,9 +397,11 @@ const App = () => {
     if (document.readyState === 'loading') { window.addEventListener('DOMContentLoaded', () => { setInterval(injectUI, 2000); run(); }); } 
     else { setInterval(injectUI, 2000); run(); }
 })();`;
-    } else {
-      // 模式二：v1.1.11 批次列印模式 (嚴格防誤點修正版)
-      return `// ==UserScript==
+            } else if (currentMode === 'print') {
+                // v1.1.11 批次列印模式 (修復版)
+                const defaultPrintCount = printCountInput.value;
+                
+                return `// ==UserScript==
 // @name         ProQuest 深度自動化批次助手 (模式二：批次列印)
 // @namespace    http://tampermonkey.net/
 // @version      1.1.11
@@ -303,9 +442,9 @@ const App = () => {
 
     const getState = () => {
         try {
-            return JSON.parse(localStorage.getItem('pq_print_state')) || { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${printTargetCount} };
+            return JSON.parse(localStorage.getItem('pq_print_state')) || { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultPrintCount} };
         } catch(e) { 
-            return { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${printTargetCount} }; 
+            return { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultPrintCount} }; 
         }
     };
     const saveState = (s) => localStorage.setItem('pq_print_state', JSON.stringify(s));
@@ -343,7 +482,7 @@ const App = () => {
         let state = getState();
         if (state.phase === 'IDLE' || state.phase === 'PAUSED_FOR_TESTING') return;
 
-        const TARGET_COUNT = state.targetCount || ${printTargetCount};
+        const TARGET_COUNT = state.targetCount || ${defaultPrintCount};
 
         try {
             const modalBtn = document.querySelector(SELECTORS.closeModalBtn);
@@ -784,154 +923,42 @@ const App = () => {
     if (document.readyState === 'loading') { window.addEventListener('DOMContentLoaded', () => { setInterval(injectUI, 2000); run(); }); } 
     else { setInterval(injectUI, 2000); run(); }
 })();`;
-    }
-  };
-
-  const handleCopy = () => {
-    const text = generateScript();
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    document.body.appendChild(textArea);
-    textArea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textArea);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-900 font-sans">
-      <div className="max-w-4xl mx-auto space-y-6">
+        }
         
-        {/* 標題區塊 */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-3 mb-2">
-            <ShieldCheck className="w-8 h-8 text-emerald-500" />
-            <h1 className="text-2xl font-bold">ProQuest 助手 (多模式整合版)</h1>
-          </div>
-          <p className="text-slate-500 text-sm">此版本支援產生不同情境的自動化腳本。請先選擇您需要的模式，設定好參數後再點擊複製。</p>
-        </div>
+        // 複製邏輯
+        const textArea = document.createElement("textarea");
+        textArea.value = currentMode === 'browse' ? document.getElementById('browseScriptPlaceholder').value : document.getElementById('printScriptPlaceholder').value; // 這邊的替換在純HTML中會比較簡單
+    }
 
-        {/* 模式切換頁籤 (Tabs) */}
-        <div className="flex p-1 space-x-1 bg-slate-200 rounded-xl">
-          <button 
-            onClick={() => setActiveTab('browse')}
-            className={`w-full py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'browse' ? 'bg-white shadow text-sky-600' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            <MousePointerClick className="w-5 h-5" /> 模式一：逐筆瀏覽
-          </button>
-          <button 
-            onClick={() => setActiveTab('print')}
-            className={`w-full py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'print' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            <Printer className="w-5 h-5" /> 模式二：批次列印 (v1.1.11)
-          </button>
-        </div>
-
-        {/* 設定與產出區塊 */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
-          
-          <label className="block border-b border-slate-100 pb-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold flex items-center gap-2">
-                <List className="w-4 h-4 text-sky-500" /> 共用搜尋詞清單 (每行一個)
-              </span>
-              <div>
-                <input 
-                    type="file" 
-                    id="fileInput" 
-                    accept=".txt" 
-                    className="hidden" 
-                    onChange={handleFileUpload} 
-                />
-                <label 
-                    htmlFor="fileInput" 
-                    className="cursor-pointer text-xs flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-1 px-3 rounded-lg transition-colors border border-slate-200"
-                >
-                  <FolderOpen className="w-4 h-4" /> 匯入 TXT
-                </label>
-              </div>
-            </div>
-            <textarea 
-              className="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm focus:ring-2 focus:ring-sky-500 outline-none transition-all"
-              placeholder="例如：&#10;COVID-19 Economics&#10;Social Media Psychology"
-              value={keywords}
-              onChange={handleKeywordsChange}
-            />
-          </label>
-          
-          {/* 模式一參數 */}
-          {activeTab === 'browse' && (
-            <div className="flex flex-col sm:flex-row gap-4 items-center animate-fade-in">
-              <label className="flex-1 w-full">
-                <span className="text-xs font-medium text-slate-500">啟動時的「預設」瀏覽筆數</span>
-                <input 
-                  type="number" 
-                  value={browseTargetCount} 
-                  onChange={(e) => setBrowseTargetCount(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all" 
-                />
-              </label>
-              <label className="flex-1 w-full">
-                <span className="text-xs font-medium text-slate-500">啟動時的「預設」翻頁間隔 (毫秒)</span>
-                <input 
-                  type="number" 
-                  value={browseDelay} 
-                  onChange={(e) => setBrowseDelay(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all" 
-                />
-              </label>
-            </div>
-          )}
-
-          {/* 模式二參數 */}
-          {activeTab === 'print' && (
-            <div className="flex flex-col sm:flex-row gap-4 items-start animate-fade-in">
-              <label className="flex-1 w-full">
-                <span className="text-xs font-medium text-slate-500">啟動時的「預設」列印筆數</span>
-                <input 
-                  type="number" 
-                  step="100" 
-                  min="100" 
-                  value={printTargetCount} 
-                  onChange={(e) => setPrintTargetCount(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all" 
-                />
-                <span className="text-xs text-rose-500 mt-1 block font-bold">* 必須為 100 的倍數</span>
-              </label>
-            </div>
-          )}
-          
-          <button 
-            onClick={handleCopy} 
-            className={`w-full py-4 mt-2 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${
-              activeTab === 'browse' ? 'bg-sky-500 hover:bg-sky-600' : 'bg-emerald-500 hover:bg-emerald-600'
-            }`}
-          >
-            {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-            <span>
-              {copied 
-                ? "✅ 複製成功！" 
-                : activeTab === 'browse' ? "複製「逐筆瀏覽」腳本" : "複製「批次列印」腳本"}
-            </span>
-          </button>
-        </div>
-
-        <div className="bg-sky-50 p-6 rounded-2xl border border-sky-200 flex gap-4">
-          <Info className="w-6 h-6 text-sky-600 shrink-0" />
-          <div className="text-sm text-sky-900 space-y-2">
-            <p className="font-bold underline">操作說明：</p>
-            <p>請先在上方點擊頁籤切換您要產生的腳本類型。兩種模式產生的 Tampermonkey 腳本功能互相獨立，請依照您當下的作業需求選擇對應的腳本進行複製與安裝。</p>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
-};
-
-export default App;
+        // === 綁定複製按鈕事件 ===
+        copyBtn.addEventListener('click', () => {
+            const scriptContent = generateScript();
+            
+            const textArea = document.createElement("textarea");
+            textArea.value = scriptContent;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            document.body.appendChild(textArea);
+            
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            // 變更圖示與樣式
+            copyIcon.className = "ph ph-check-circle text-xl";
+            const originalText = copyText.textContent;
+            copyText.textContent = "✅ 複製成功！";
+            
+            // 根據不同模式切換複製成功的顏色
+            const originalClasses = copyBtn.className;
+            copyBtn.className = "w-full py-4 mt-2 bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2";
+            
+            setTimeout(() => {
+                copyIcon.className = "ph ph-copy text-xl";
+                copyText.textContent = originalText;
+                copyBtn.className = originalClasses; // 恢復原本的按鈕樣式
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
