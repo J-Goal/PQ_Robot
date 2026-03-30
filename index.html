@@ -898,7 +898,7 @@
             const limit = parseInt(limitInput, 10);
             if (isNaN(limit) || limit <= 0 || limit > KEYWORDS.length) return;
 
-            const countInput = window.prompt("請確認每個詞的「目標列印筆數」\\n(注意：必須為 100 的倍數！)：", ${printTargetCount});
+            const countInput = window.prompt("請確認每個詞的「目標列印筆數」\\n(注意：必須為 100 的倍數！)：", ${defaultPrintCount});
             if (countInput === null) return;
             const tCount = parseInt(countInput, 10);
             if (isNaN(tCount) || tCount <= 0 || tCount % 100 !== 0) { 
