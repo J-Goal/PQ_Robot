@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ProQuest 批次自動化生成器</title>
-    <!-- 引入 Tailwind CSS (CDN 方式，免安裝) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 Phosphor Icons 圖標庫 -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
     <style>
         /* 自訂簡單的捲軸樣式 */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -19,36 +18,31 @@
 <body class="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-900 font-sans">
     <div class="max-w-4xl mx-auto space-y-6">
         
-        <!-- 標題區塊 -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <div class="flex items-center gap-3 mb-2">
                 <i class="ph ph-shield-check text-3xl text-emerald-500"></i>
                 <h1 class="text-2xl font-bold">ProQuest 助手 (多模式整合版)</h1>
-                <span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-semibold border border-emerald-200">v1.1.17 (2026/03/30 更新)</span>
+                <span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-semibold border border-emerald-200">v1.1.18 (2026/04/21 更新)</span>
             </div>
             <p class="text-slate-500 text-sm">此版本支援產生不同情境的自動化腳本。請先選擇您需要的模式，設定好參數後再點擊複製。</p>
         </div>
 
-        <!-- 模式切換頁籤 (Tabs) -->
         <div class="flex p-1 space-x-1 bg-slate-200 rounded-xl">
             <button id="tabBrowse" class="w-full py-3 text-sm font-bold rounded-lg bg-white shadow text-sky-600 transition-all flex items-center justify-center gap-2">
                 <i class="ph ph-cursor-click text-lg"></i> 模式一：逐筆瀏覽
             </button>
             <button id="tabPrint" class="w-full py-3 text-sm font-bold rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all flex items-center justify-center gap-2">
-                <i class="ph ph-printer text-lg"></i> 模式二：批次列印 (v1.1.17)
+                <i class="ph ph-printer text-lg"></i> 模式二：批次列印 (v1.1.18)
             </button>
         </div>
 
-        <!-- 設定與產出區塊 -->
         <div class="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
             
-            <!-- 共用區塊：關鍵字清單 -->
             <label class="block border-b border-slate-100 pb-4">
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-sm font-semibold flex items-center gap-2">
                         <i class="ph ph-list-dashes text-lg text-sky-500"></i> 共用搜尋詞清單 (每行一個)
                     </span>
-                    <!-- 檔案匯入按鈕 -->
                     <div>
                         <input type="file" id="fileInput" accept=".txt" class="hidden">
                         <button id="importBtn" class="text-xs flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-1 px-3 rounded-lg transition-colors border border-slate-200">
@@ -59,7 +53,6 @@
                 <textarea id="keywordsInput" class="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm focus:ring-2 focus:ring-sky-500 outline-none transition-all" placeholder="例如：&#10;COVID-19 Economics&#10;Social Media Psychology"></textarea>
             </label>
             
-            <!-- 模式一：逐筆瀏覽的專屬參數 -->
             <div id="browseParams" class="flex flex-col sm:flex-row gap-4 items-center animate-fade-in">
                 <label class="flex-1 w-full">
                     <span class="text-xs font-medium text-slate-500">啟動時的「預設」瀏覽筆數</span>
@@ -71,7 +64,6 @@
                 </label>
             </div>
 
-            <!-- 模式二：批次列印的專屬參數 (預設隱藏) -->
             <div id="printParams" class="flex flex-col sm:flex-row gap-4 items-start hidden animate-fade-in">
                 <label class="flex-1 w-full">
                     <span class="text-xs font-medium text-slate-500">啟動時的「預設」列印筆數</span>
@@ -80,14 +72,12 @@
                 </label>
             </div>
             
-            <!-- 複製按鈕 -->
             <button id="copyBtn" class="w-full py-4 mt-2 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
                 <i class="ph ph-copy text-xl" id="copyIcon"></i>
                 <span id="copyText">複製「逐筆瀏覽」腳本</span>
             </button>
         </div>
 
-        <!-- 說明區塊 -->
         <div class="bg-sky-50 p-6 rounded-2xl border border-sky-200 flex gap-4">
             <i class="ph ph-info text-2xl text-sky-600 shrink-0"></i>
             <div class="text-sm text-sky-900 space-y-2">
@@ -97,7 +87,6 @@
         </div>
     </div>
 
-    <!-- 核心邏輯腳本 -->
     <script>
         // === 取得 DOM 元素 ===
         const keywordsInput = document.getElementById('keywordsInput');
@@ -182,7 +171,7 @@
                 return `// ==UserScript==
 // @name         ProQuest 深度自動化批次助手 (模式一：逐筆瀏覽)
 // @namespace    http://tampermonkey.net/
-// @version      3.2.2
+// @version      3.2.3
 // @description  完整流程：搜尋 -> 逐筆瀏覽達標 -> 返回首頁 -> 換詞循環
 // @author       Gemini Assistant
 // @match        *://www.proquest.com/*
@@ -212,17 +201,15 @@
     const getState = () => {
         try {
             return JSON.parse(localStorage.getItem('pq_auto_state')) || { 
-                keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultTargetCount}, stepDelay: ${defaultDelay}
+                keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultTargetCount}, stepDelay: ${defaultDelay}, accountId: null
             };
         } catch(e) { 
-            return { keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultTargetCount}, stepDelay: ${defaultDelay} }; 
+            return { keywordIndex: 0, viewedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultTargetCount}, stepDelay: ${defaultDelay}, accountId: null }; 
         }
     };
     const saveState = (s) => localStorage.setItem('pq_auto_state', JSON.stringify(s));
 
-    const getBaseUrl = () => {
-        const params = new URLSearchParams(window.location.search);
-        const accId = params.get('accountid');
+    const getBaseUrl = (accId) => {
         return accId ? "https://www.proquest.com/index?accountid=" + accId : "https://www.proquest.com/index";
     };
 
@@ -251,6 +238,14 @@
 
     const run = async () => {
         let state = getState();
+        
+        // 【記憶 Account ID 機制】
+        const urlAccId = new URLSearchParams(window.location.search).get('accountid');
+        if (urlAccId && state.accountId !== urlAccId) {
+            state.accountId = urlAccId;
+            saveState(state);
+        }
+
         if (state.phase === 'IDLE') return;
 
         const TARGET_COUNT = state.targetCount || ${defaultTargetCount};
@@ -330,7 +325,7 @@
                         state.phase = 'START_SEARCH';
                         state.viewedCount = 0;
                         saveState(state);
-                        setTimeout(() => { window.location.href = getBaseUrl(); }, 3000);
+                        setTimeout(() => { window.location.href = getBaseUrl(state.accountId); }, 3000);
                         return; 
                     }
                 }
@@ -398,11 +393,11 @@
             if (!window.confirm(confirmMsg)) return; 
             
             saveState({ keywordIndex: actualStartIndex, viewedCount: 0, phase: 'START_SEARCH', maxKeywords: endLimit, targetCount: tCount, stepDelay: tDelay });
-            location.href = getBaseUrl(); 
+            location.reload(); // 改用 reload 讓 run() 能抓到最新網址
         };
         
         document.getElementById('pq-reset').onclick = () => {
-            saveState({ keywordIndex: 0, viewedCount: 0, phase: 'IDLE' });
+            saveState({ keywordIndex: 0, viewedCount: 0, phase: 'IDLE', accountId: null });
             location.reload();
         };
     };
@@ -416,8 +411,8 @@
                 return `// ==UserScript==
 // @name         ProQuest 深度自動化批次助手 (模式二：批次列印)
 // @namespace    http://tampermonkey.net/
-// @version      1.1.17
-// @description  全自動化正式版：修正列印按鈕選擇器，徹底拔除危險的模糊比對，避免誤點文章
+// @version      1.1.18
+// @description  全自動化正式版：增強跨電腦下拉選單適應性，完美記憶 Account ID 與精準返回首頁
 // @author       Gemini Assistant
 // @match        *://www.proquest.com/*
 // @run-at       document-start
@@ -428,7 +423,6 @@
 (function() {
     'use strict';
 
-    // 【核心修正 v1.1.17】將 printBtn 的 a[title*="Print"] 等模糊比對改為精確的 ID 與完整字串比對
     const SELECTORS = {
         searchBox:   'textarea#searchTerm, input#searchTerm, input[name="searchTerm"]', 
         fullTextCb:  'input#fullTextLimit, input#ft, input[name="isFullText"]',          
@@ -455,17 +449,16 @@
 
     const getState = () => {
         try {
-            return JSON.parse(localStorage.getItem('pq_print_state')) || { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultPrintCount} };
+            return JSON.parse(localStorage.getItem('pq_print_state')) || { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultPrintCount}, accountId: null };
         } catch(e) { 
-            return { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultPrintCount} }; 
+            return { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultPrintCount}, accountId: null }; 
         }
     };
     const saveState = (s) => localStorage.setItem('pq_print_state', JSON.stringify(s));
 
-    const getBaseUrl = () => {
-        const params = new URLSearchParams(window.location.search);
-        const accId = params.get('accountid');
-        return accId ? "https://www.proquest.com/index?accountid=" + accId : "https://www.proquest.com/index";
+    // 【核心升級 v1.1.18】完美記憶 Account ID
+    const getBaseUrl = (stateAccId) => {
+        return stateAccId ? "https://www.proquest.com/index?accountid=" + stateAccId : "https://www.proquest.com/index";
     };
 
     const waitForElement = (selector, timeout = 15000, requireVisible = true) => {
@@ -493,6 +486,14 @@
 
     const run = async () => {
         let state = getState();
+        
+        // 隨時隨地捕捉並記憶您的 Account ID (圖書館憑證)
+        const urlAccId = new URLSearchParams(window.location.search).get('accountid');
+        if (urlAccId && state.accountId !== urlAccId) {
+            state.accountId = urlAccId;
+            saveState(state);
+        }
+
         if (state.phase === 'IDLE' || state.phase === 'PAUSED_FOR_TESTING') return;
 
         const TARGET_COUNT = state.targetCount || ${defaultPrintCount};
@@ -518,15 +519,19 @@
                 log("⏳ 準備切換至下一個關鍵字，正在安全地尋找首頁標誌...");
                 
                 let logo = null;
-                const headerArea = document.querySelector('header, nav, .navbar, #navbar, #topNavigation');
+                // 【核心升級 v1.1.18】擴大並精準鎖定頂部導覽列區域
+                const headerArea = document.querySelector('header, nav, .navbar, #navbar, #topNavigation, [role="banner"]');
                 if (headerArea) {
-                    logo = headerArea.querySelector('a.navbar-brand, a.brand, .logo a, a#logo, img[alt="ProQuest"]');
-                    if (logo && logo.tagName && logo.tagName.toLowerCase() === 'img') logo = logo.closest('a');
-                }
-
-                if (logo && logo.href && logo.href.includes('/docview/')) {
-                    log("⚠️ 發現抓取到的 Logo 其實是文章連結，已強制排除。");
-                    logo = null; 
+                    const links = Array.from(headerArea.querySelectorAll('a'));
+                    logo = links.find(a => {
+                        const href = a.href || '';
+                        const title = (a.title || '').toLowerCase();
+                        const text = (a.textContent || '').toLowerCase();
+                        
+                        if (href.includes('/docview/') || href.includes('/results')) return false; // 絕對排除文章與結果頁
+                        
+                        return title.includes('proquest') || text.includes('proquest') || title.includes('home') || a.classList.contains('navbar-brand') || a.classList.contains('brand') || a.querySelector('img[alt*="ProQuest" i]');
+                    });
                 }
 
                 state.keywordIndex += 1;
@@ -538,7 +543,7 @@
                     saveState(state);
                     alert("🎉 恭喜！您設定的所有關鍵字批次列印任務已「全數完成」！\\n\\n太棒了，腳本已成功為您處理完畢！");
                     if (logo) logo.click();
-                    else window.location.href = getBaseUrl();
+                    else window.location.href = getBaseUrl(state.accountId);
                     return;
                 }
 
@@ -549,10 +554,10 @@
                 if (logo) {
                     log("👉 找到標誌，執行點擊返回首頁。");
                     logo.click();
-                    setTimeout(() => { window.location.href = getBaseUrl(); }, 3000); 
+                    setTimeout(() => { window.location.href = getBaseUrl(state.accountId); }, 3000); 
                 } else {
-                    log("⚠️ 安全機制啟動：為了避免誤點，腳本將直接使用網址重導向返回首頁...");
-                    window.location.href = getBaseUrl();
+                    log("⚠️ 使用保險機制：將帶有記憶 ID 的網址重導向返回首頁...");
+                    window.location.href = getBaseUrl(state.accountId);
                 }
             };
             returnToHome();
@@ -675,7 +680,6 @@
                     log(\`⏳ 文件準備中，請稍候... (已等待 \${attempts * 2} 秒)\`);
                 }
                 
-                // --- 逾時觸發分流 ---
                 if (attempts >= maxAttempts) {
                     clearInterval(checkTimer);
                     log("⚠️ 等待文件產生達 180 秒，觸發強制返回並清除機制！");
@@ -718,7 +722,6 @@
             return;
         }
 
-        // --- 處理最終「列印選項對話框」 ---
         const processPrintModal = async () => {
             log("⏳ 正在等待列印選項對話框實體化載入...");
             
@@ -957,24 +960,45 @@
                     }
                 };
 
-                const itemsCombo = await waitForElement(SELECTORS.itemsCombo);
-                if (itemsCombo) {
+                // 【核心升級 v1.1.18】增強型下拉選單判斷，適配原生 select 與自訂元件
+                const itemsCombo = await waitForElement(SELECTORS.itemsCombo, 5000, true);
+                const actualSelect = document.querySelector('select#itemsPerPage, select[name="itemsPerPage"]');
+                
+                if (actualSelect && actualSelect.value !== '100') {
+                    log("🔄 偵測到原生下拉選單，準備切換 100 筆...");
+                    actualSelect.value = '100';
+                    actualSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    setTimeout(doSelectAll, AJAX_DELAY);
+                    return;
+                } else if (itemsCombo) {
                     if (!itemsCombo.textContent.includes('100')) {
+                        log("🔄 每頁筆數不是 100 筆，準備點擊自訂下拉選單...");
                         itemsCombo.click();
-                        setTimeout(() => {
-                            const listbox = document.querySelector(SELECTORS.itemsListbox);
-                            if (listbox) {
-                                const options = listbox.querySelectorAll('[role="option"], li, div');
-                                const targetOption = Array.from(options).find(opt => opt.textContent.trim() === '100');
-                                if (targetOption) {
-                                    targetOption.click();
-                                    setTimeout(doSelectAll, AJAX_DELAY); 
-                                } else doSelectAll();
+                        
+                        const listbox = await waitForElement(SELECTORS.itemsListbox, 5000, true);
+                        if (listbox) {
+                            await new Promise(r => setTimeout(r, 500)); // 讓選單動畫跑完
+                            const options = listbox.querySelectorAll('[role="option"], li, div');
+                            const targetOption = Array.from(options).find(opt => opt.textContent.trim() === '100');
+                            if (targetOption) {
+                                targetOption.click();
+                                log("✅ 成功點選 100 筆！等待系統重整...");
+                                setTimeout(doSelectAll, AJAX_DELAY); 
+                            } else {
+                                log("⚠️ 找不到 100 筆的選項，將繼續執行...");
+                                doSelectAll();
                             }
-                        }, 500);
+                        } else {
+                            log("⚠️ 找不到下拉選單清單，將繼續執行...");
+                            doSelectAll();
+                        }
                         return; 
-                    } else setTimeout(doSelectAll, 1500);
-                } else setTimeout(doSelectAll, 1500);
+                    } else {
+                        setTimeout(doSelectAll, 1500);
+                    }
+                } else {
+                    setTimeout(doSelectAll, 1500);
+                }
             }
         }
     };
@@ -1023,12 +1047,12 @@
             const confirmMsg = "請確認批次列印任務資訊：\\n\\n執行範圍：第 " + startIdx + " 個 到 第 " + endLimit + " 個關鍵字\\n總計執行單字：" + runCount + " 個\\n每個詞的列印筆數：" + tCount + " 筆\\n-------------------------\\n總計列印：" + totalDocs + " 篇\\n\\n按下「確定」開始運行腳本！";
             if (!window.confirm(confirmMsg)) return; 
             
-            saveState({ keywordIndex: actualStartIndex, selectedCount: 0, phase: 'START_SEARCH', maxKeywords: endLimit, targetCount: tCount });
-            location.href = getBaseUrl(); 
+            saveState({ keywordIndex: actualStartIndex, selectedCount: 0, phase: 'START_SEARCH', maxKeywords: endLimit, targetCount: tCount, accountId: getState().accountId });
+            location.reload(); 
         };
         
         document.getElementById('pq-reset').onclick = () => {
-            saveState({ keywordIndex: 0, selectedCount: 0, phase: 'IDLE' });
+            saveState({ keywordIndex: 0, selectedCount: 0, phase: 'IDLE', accountId: null });
             location.reload();
         };
     };
