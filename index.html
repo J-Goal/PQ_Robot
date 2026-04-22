@@ -26,7 +26,7 @@
             <div class="flex items-center gap-3 mb-2">
                 <i class="ph ph-shield-check text-3xl text-emerald-500"></i>
                 <h1 class="text-2xl font-bold">ProQuest 助手 (多模式整合版)</h1>
-                <span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-semibold border border-emerald-200">v1.1.22 (2026/04/22 更新)</span>
+                <span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-semibold border border-emerald-200">v1.1.23 (2026/04/22 更新)</span>
             </div>
             <p class="text-slate-500 text-sm">此版本支援產生不同情境的自動化腳本。請先選擇您需要的模式，設定好參數後再點擊複製。</p>
         </div>
@@ -37,7 +37,7 @@
                 <i class="ph ph-cursor-click text-lg"></i> 模式一：逐筆瀏覽
             </button>
             <button id="tabPrint" class="cursor-pointer w-full py-3 text-sm font-bold rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all flex items-center justify-center gap-2">
-                <i class="ph ph-printer text-lg"></i> 模式二：批次列印 (v1.1.22)
+                <i class="ph ph-printer text-lg"></i> 模式二：批次列印 (v1.1.23)
             </button>
         </div>
 
@@ -423,8 +423,8 @@
                 return `// ==UserScript==
 // @name         ProQuest 深度自動化批次助手 (模式二：批次列印)
 // @namespace    http://tampermonkey.net/
-// @version      1.1.22
-// @description  全自動化正式版：結合早期成功範圍定位與動態等待，完美解決客製化 100 筆下拉選單失效問題
+// @version      1.1.23
+// @description  全自動化正式版：加入「狀態記憶鎖」斬斷無限迴圈，強化下拉選單原生與客製化雙重判斷機制
 // @author       Gemini Assistant
 // @match        *://www.proquest.com/*
 // @run-at       document-start
@@ -461,9 +461,9 @@
 
     const getState = () => {
         try {
-            return JSON.parse(localStorage.getItem('pq_print_state')) || { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultPrintCount}, accountId: null };
+            return JSON.parse(localStorage.getItem('pq_print_state')) || { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultPrintCount}, accountId: null, hasSet100: false };
         } catch(e) { 
-            return { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultPrintCount}, accountId: null }; 
+            return { keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${defaultPrintCount}, accountId: null, hasSet100: false }; 
         }
     };
     const saveState = (s) => localStorage.setItem('pq_print_state', JSON.stringify(s));
@@ -555,7 +555,9 @@
                     return;
                 }
 
+                // 準備下一個循環，並重置 hasSet100 鎖
                 state.phase = 'START_SEARCH';
+                state.hasSet100 = false;
                 saveState(state);
 
                 log("✅ 任務推進！準備執行下一個關鍵字。");
@@ -966,20 +968,31 @@
                     }
                 };
 
-                // 【核心升級 v1.1.22】結合早期成功經驗與動態等待，精準捕捉客製化選單內的選項
-                const itemsCombo = await waitForElement(SELECTORS.itemsCombo, 5000, true);
-                
-                if (itemsCombo) {
-                    if (!itemsCombo.textContent.includes('100')) {
-                        log("🔄 每頁筆數不是 100 筆，準備點開下拉選單...");
+                // 【核心升級 v1.1.23】加入「狀態記憶鎖 (hasSet100)」與強化判斷，徹底斬斷無限迴圈
+                if (!state.hasSet100) {
+                    let isAlready100 = false;
+                    const nativeSelect = document.querySelector('select#itemsPerPage, select[name="itemsPerPage"]');
+                    if (nativeSelect && nativeSelect.value === '100') isAlready100 = true;
+                    
+                    const itemsCombo = await waitForElement(SELECTORS.itemsCombo, 5000, true);
+                    if (itemsCombo) {
+                        const text = (itemsCombo.textContent || itemsCombo.innerText || itemsCombo.value || '').trim();
+                        if (text.includes('100')) isAlready100 = true;
+                    }
+
+                    if (isAlready100) {
+                        log("✅ 系統已是 100 筆顯示模式，準備執行全選...");
+                        state.hasSet100 = true;
+                        saveState(state);
+                        setTimeout(doSelectAll, 1500);
+                    } else if (itemsCombo) {
+                        log("🔄 準備點開下拉選單切換至 100 筆...");
                         itemsCombo.click();
                         
                         let targetOption = null;
                         let attempts = 0;
-                        while (attempts < 15) { // 等待最多 7.5 秒讓選單動畫與 DOM 渲染完成
+                        while (attempts < 15) { 
                             await new Promise(r => setTimeout(r, 500)); 
-                            
-                            // 找回早期成功的 listbox 範圍限制，避免在全畫面抓到其他包含 100 的無關文字
                             const listbox = document.querySelector(SELECTORS.itemsListbox);
                             if (listbox) {
                                 const options = listbox.querySelectorAll('[role="option"], li, a, div');
@@ -992,27 +1005,24 @@
                         if (targetOption) {
                             targetOption.click();
                             log("✅ 成功捕捉並點選 100 筆！等待系統重整...");
+                            // 標記為已經設定過，避免因為重載引發無限迴圈
+                            state.hasSet100 = true;
+                            saveState(state);
                             setTimeout(doSelectAll, AJAX_DELAY); 
                         } else {
-                            log("⚠️ 畫面中未能捕捉到 100 筆的選項，將檢查是否有原生備用選單...");
-                            
-                            // 【安全備案】如果客製選單真的壞了，再試著找原生的隱藏 <select>
-                            const nativeSelect = document.querySelector('select#itemsPerPage, select[name="itemsPerPage"]');
-                            if (nativeSelect && nativeSelect.value !== '100') {
-                                log("🔄 嘗試使用原生下拉選單切換 100 筆...");
-                                nativeSelect.value = '100';
-                                nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                                setTimeout(doSelectAll, AJAX_DELAY);
-                            } else {
-                                log("⚠️ 無法切換至 100 筆，將以目前筆數繼續執行...");
-                                doSelectAll();
-                            }
+                            log("⚠️ 畫面中未能捕捉到 100 筆的選項，將繼續執行全選...");
+                            state.hasSet100 = true;
+                            saveState(state);
+                            doSelectAll();
                         }
-                        return; 
                     } else {
+                        log("⚠️ 找不到下拉選單，將繼續執行全選...");
+                        state.hasSet100 = true;
+                        saveState(state);
                         setTimeout(doSelectAll, 1500);
                     }
                 } else {
+                    // 已經為當前關鍵字設定過 100 筆，直接執行全選
                     setTimeout(doSelectAll, 1500);
                 }
             }
@@ -1063,12 +1073,13 @@
             const confirmMsg = "請確認批次列印任務資訊：\\n\\n執行範圍：第 " + startIdx + " 個 到 第 " + endLimit + " 個關鍵字\\n總計執行單字：" + runCount + " 個\\n每個詞的列印筆數：" + tCount + " 筆\\n-------------------------\\n總計列印：" + totalDocs + " 篇\\n\\n按下「確定」開始運行腳本！";
             if (!window.confirm(confirmMsg)) return; 
             
-            saveState({ keywordIndex: actualStartIndex, selectedCount: 0, phase: 'START_SEARCH', maxKeywords: endLimit, targetCount: tCount, accountId: getState().accountId });
+            // 重置 hasSet100 鎖
+            saveState({ keywordIndex: actualStartIndex, selectedCount: 0, phase: 'START_SEARCH', maxKeywords: endLimit, targetCount: tCount, accountId: getState().accountId, hasSet100: false });
             location.reload(); 
         };
         
         document.getElementById('pq-reset').onclick = () => {
-            saveState({ keywordIndex: 0, selectedCount: 0, phase: 'IDLE', accountId: null });
+            saveState({ keywordIndex: 0, selectedCount: 0, phase: 'IDLE', accountId: null, hasSet100: false });
             location.reload();
         };
     };
