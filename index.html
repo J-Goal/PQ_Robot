@@ -26,7 +26,7 @@
             <div class="flex items-center gap-3 mb-2">
                 <i class="ph ph-shield-check text-3xl text-emerald-500"></i>
                 <h1 class="text-2xl font-bold">ProQuest 助手 (多模式整合版)</h1>
-                <span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-semibold border border-emerald-200">v1.1.21 (2026/04/22 更新)</span>
+                <span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-semibold border border-emerald-200">v1.1.22 (2026/04/22 更新)</span>
             </div>
             <p class="text-slate-500 text-sm">此版本支援產生不同情境的自動化腳本。請先選擇您需要的模式，設定好參數後再點擊複製。</p>
         </div>
@@ -37,7 +37,7 @@
                 <i class="ph ph-cursor-click text-lg"></i> 模式一：逐筆瀏覽
             </button>
             <button id="tabPrint" class="cursor-pointer w-full py-3 text-sm font-bold rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all flex items-center justify-center gap-2">
-                <i class="ph ph-printer text-lg"></i> 模式二：批次列印 (v1.1.21)
+                <i class="ph ph-printer text-lg"></i> 模式二：批次列印 (v1.1.22)
             </button>
         </div>
 
@@ -423,8 +423,8 @@
                 return `// ==UserScript==
 // @name         ProQuest 深度自動化批次助手 (模式二：批次列印)
 // @namespace    http://tampermonkey.net/
-// @version      1.1.21
-// @description  全自動化正式版：優化 100 筆下拉選單之偵測機制，直接捕捉選項以繞過隱藏容器陷阱
+// @version      1.1.22
+// @description  全自動化正式版：結合早期成功範圍定位與動態等待，完美解決客製化 100 筆下拉選單失效問題
 // @author       Gemini Assistant
 // @match        *://www.proquest.com/*
 // @run-at       document-start
@@ -966,7 +966,7 @@
                     }
                 };
 
-                // 【核心升級 v1.1.21】不再死等隱藏容器，直接全畫面掃描「100」選項並點擊
+                // 【核心升級 v1.1.22】結合早期成功經驗與動態等待，精準捕捉客製化選單內的選項
                 const itemsCombo = await waitForElement(SELECTORS.itemsCombo, 5000, true);
                 
                 if (itemsCombo) {
@@ -976,19 +976,16 @@
                         
                         let targetOption = null;
                         let attempts = 0;
-                        while (attempts < 10) {
+                        while (attempts < 15) { // 等待最多 7.5 秒讓選單動畫與 DOM 渲染完成
                             await new Promise(r => setTimeout(r, 500)); 
                             
-                            // 放寬範圍：直接找畫面上文字為「100」的選項元素
-                            const options = Array.from(document.querySelectorAll('[role="option"], li, a, span')).filter(el => {
-                                const rect = el.getBoundingClientRect();
-                                return rect.width > 0 && rect.height > 0 && el.textContent.trim() === '100';
-                            });
-                            
-                            // 確保找到的是選單裡的東西，避免誤點其他包含100的地方
-                            targetOption = options.find(opt => opt.closest('ul, [role="listbox"], .dropdown-menu, .menu'));
-                            
-                            if (targetOption) break;
+                            // 找回早期成功的 listbox 範圍限制，避免在全畫面抓到其他包含 100 的無關文字
+                            const listbox = document.querySelector(SELECTORS.itemsListbox);
+                            if (listbox) {
+                                const options = listbox.querySelectorAll('[role="option"], li, a, div');
+                                targetOption = Array.from(options).find(opt => opt.textContent.trim() === '100');
+                                if (targetOption) break;
+                            }
                             attempts++;
                         }
 
