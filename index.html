@@ -26,7 +26,7 @@
             <div class="flex items-center gap-3 mb-2">
                 <i class="ph ph-shield-check text-3xl text-emerald-500"></i>
                 <h1 class="text-2xl font-bold">ProQuest 助手 (多模式整合版)</h1>
-                <span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-semibold border border-emerald-200">v1.1.20 (2026/04/22 更新)</span>
+                <span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-semibold border border-emerald-200">v1.1.21 (2026/04/22 更新)</span>
             </div>
             <p class="text-slate-500 text-sm">此版本支援產生不同情境的自動化腳本。請先選擇您需要的模式，設定好參數後再點擊複製。</p>
         </div>
@@ -37,7 +37,7 @@
                 <i class="ph ph-cursor-click text-lg"></i> 模式一：逐筆瀏覽
             </button>
             <button id="tabPrint" class="cursor-pointer w-full py-3 text-sm font-bold rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all flex items-center justify-center gap-2">
-                <i class="ph ph-printer text-lg"></i> 模式二：批次列印 (v1.1.20)
+                <i class="ph ph-printer text-lg"></i> 模式二：批次列印 (v1.1.21)
             </button>
         </div>
 
@@ -423,8 +423,8 @@
                 return `// ==UserScript==
 // @name         ProQuest 深度自動化批次助手 (模式二：批次列印)
 // @namespace    http://tampermonkey.net/
-// @version      1.1.20
-// @description  全自動化正式版：專注操作客製化下拉選單，避免誤觸原生 select 陷阱
+// @version      1.1.21
+// @description  全自動化正式版：優化 100 筆下拉選單之偵測機制，直接捕捉選項以繞過隱藏容器陷阱
 // @author       Gemini Assistant
 // @match        *://www.proquest.com/*
 // @run-at       document-start
@@ -966,7 +966,7 @@
                     }
                 };
 
-                // 【核心升級 v1.1.20】完全拔除隱形原生 select 陷阱，強制只操作肉眼可見的客製化選單
+                // 【核心升級 v1.1.21】不再死等隱藏容器，直接全畫面掃描「100」選項並點擊
                 const itemsCombo = await waitForElement(SELECTORS.itemsCombo, 5000, true);
                 
                 if (itemsCombo) {
@@ -974,22 +974,42 @@
                         log("🔄 每頁筆數不是 100 筆，準備點開下拉選單...");
                         itemsCombo.click();
                         
-                        const listbox = await waitForElement(SELECTORS.itemsListbox, 5000, true);
-                        if (listbox) {
+                        let targetOption = null;
+                        let attempts = 0;
+                        while (attempts < 10) {
                             await new Promise(r => setTimeout(r, 500)); 
-                            const options = listbox.querySelectorAll('[role="option"], li, a');
-                            const targetOption = Array.from(options).find(opt => opt.textContent.trim() === '100');
-                            if (targetOption) {
-                                targetOption.click();
-                                log("✅ 成功點選 100 筆！等待系統重整...");
-                                setTimeout(doSelectAll, AJAX_DELAY); 
+                            
+                            // 放寬範圍：直接找畫面上文字為「100」的選項元素
+                            const options = Array.from(document.querySelectorAll('[role="option"], li, a, span')).filter(el => {
+                                const rect = el.getBoundingClientRect();
+                                return rect.width > 0 && rect.height > 0 && el.textContent.trim() === '100';
+                            });
+                            
+                            // 確保找到的是選單裡的東西，避免誤點其他包含100的地方
+                            targetOption = options.find(opt => opt.closest('ul, [role="listbox"], .dropdown-menu, .menu'));
+                            
+                            if (targetOption) break;
+                            attempts++;
+                        }
+
+                        if (targetOption) {
+                            targetOption.click();
+                            log("✅ 成功捕捉並點選 100 筆！等待系統重整...");
+                            setTimeout(doSelectAll, AJAX_DELAY); 
+                        } else {
+                            log("⚠️ 畫面中未能捕捉到 100 筆的選項，將檢查是否有原生備用選單...");
+                            
+                            // 【安全備案】如果客製選單真的壞了，再試著找原生的隱藏 <select>
+                            const nativeSelect = document.querySelector('select#itemsPerPage, select[name="itemsPerPage"]');
+                            if (nativeSelect && nativeSelect.value !== '100') {
+                                log("🔄 嘗試使用原生下拉選單切換 100 筆...");
+                                nativeSelect.value = '100';
+                                nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                                setTimeout(doSelectAll, AJAX_DELAY);
                             } else {
-                                log("⚠️ 找不到 100 筆的選項，將繼續執行...");
+                                log("⚠️ 無法切換至 100 筆，將以目前筆數繼續執行...");
                                 doSelectAll();
                             }
-                        } else {
-                            log("⚠️ 下拉選單未如期展開，將繼續執行...");
-                            doSelectAll();
                         }
                         return; 
                     } else {
