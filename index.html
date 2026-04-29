@@ -28,7 +28,7 @@
             <div class="flex items-center gap-3 mb-2">
                 <i class="ph ph-shield-check text-3xl text-emerald-500"></i>
                 <h1 class="text-2xl font-bold">ProQuest 助手 (多模式整合版)</h1>
-                <span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-semibold border border-emerald-200">v1.1.35 (2026/04/29 更新)</span>
+                <span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-semibold border border-emerald-200">v1.1.36 (2026/04/29 更新)</span>
             </div>
             <p class="text-slate-500 text-sm">此版本支援產生不同情境的自動化腳本。請先選擇您需要的模式，設定好參數後再點擊複製。</p>
         </div>
@@ -1258,8 +1258,8 @@
                 return `// ==UserScript==
 // @name         ProQuest 深度自動化批次助手 (模式三：批次列印 + 自動登入)
 // @namespace    http://tampermonkey.net/
-// @version      1.3.2
-// @description  正式版：完美整合自動登入切換，修復隱藏密碼框陷阱，鎖定 UI 樣式防跑版
+// @version      1.3.3
+// @description  正式版：完美整合自動登入切換，修復切換帳號後關鍵字進度錯誤問題
 // @author       Gemini Assistant
 // @match        *://*.proquest.com/*
 // @run-at       document-start
@@ -1317,9 +1317,9 @@
 
     const getState = () => {
         try {
-            return JSON.parse(localStorage.getItem('pq_login_state')) || { accountIndex: 0, keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${printCountInput.value}, accountId: null, hasSet100: false };
+            return JSON.parse(localStorage.getItem('pq_login_state')) || { accountIndex: 0, keywordIndex: 0, originalStartIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${printCountInput.value}, accountId: null, hasSet100: false };
         } catch(e) { 
-            return { accountIndex: 0, keywordIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${printCountInput.value}, accountId: null, hasSet100: false }; 
+            return { accountIndex: 0, keywordIndex: 0, originalStartIndex: 0, selectedCount: 0, phase: 'IDLE', maxKeywords: KEYWORDS.length, targetCount: ${printCountInput.value}, accountId: null, hasSet100: false }; 
         }
     };
     const saveState = (s) => localStorage.setItem('pq_login_state', JSON.stringify(s));
@@ -1445,7 +1445,11 @@
         const isSearchPage = location.pathname === '/' || location.pathname.startsWith('/index') || location.href.includes('/search') || location.search.includes('accountid');
         
         if (state.phase === 'START_SEARCH' && isSearchPage) {
-            log(\`🔍 [帳號 \${state.accountIndex + 1}] 準備輸入第 \${state.keywordIndex + 1}/\${limit} 個關鍵字: "\${currentKeyword}"\`);
+            const origStart = state.originalStartIndex || 0;
+            const currentRun = state.keywordIndex - origStart + 1;
+            const totalRun = limit - origStart;
+            log(\`🔍 [帳號 \${state.accountIndex + 1}] 準備輸入本次任務的第 \${currentRun}/\${totalRun} 個關鍵字 (整體清單序號: \${state.keywordIndex + 1}): "\${currentKeyword}"\`);
+            
             try {
                 const targetSearchBox = await waitForElement(SELECTORS.searchBox);
                 if (targetSearchBox) {
@@ -1492,7 +1496,8 @@
                 if (state.keywordIndex >= limit || state.keywordIndex >= KEYWORDS.length) {
                     log("✅ 該帳號的關鍵字任務已全數完成！準備執行登出程序...");
                     state.phase = 'START_LOGOUT';
-                    state.keywordIndex = 0; // 重置關鍵字進度給下個帳號
+                    // 【修復核心】：切換帳號時，回到最初設定的起始點，而非 0
+                    state.keywordIndex = state.originalStartIndex || 0; 
                     state.hasSet100 = false;
                     saveState(state);
                     setTimeout(run, 1000);
@@ -1994,12 +1999,13 @@
             playAlertSound();
             if (!window.confirm(confirmMsg)) return; 
             
-            saveState({ accountIndex: 0, keywordIndex: actualStartIndex, selectedCount: 0, phase: 'START_LOGIN', maxKeywords: endLimit, targetCount: tCount });
+            // 加入 originalStartIndex 記憶錨點
+            saveState({ accountIndex: 0, keywordIndex: actualStartIndex, originalStartIndex: actualStartIndex, selectedCount: 0, phase: 'START_LOGIN', maxKeywords: endLimit, targetCount: tCount, accountId: getState().accountId, hasSet100: false });
             location.reload(); 
         };
         
         document.getElementById('pq-reset').onclick = () => {
-            saveState({ accountIndex: 0, keywordIndex: 0, selectedCount: 0, phase: 'IDLE' });
+            saveState({ accountIndex: 0, keywordIndex: 0, originalStartIndex: 0, selectedCount: 0, phase: 'IDLE', accountId: null, hasSet100: false });
             location.reload();
         };
     };
